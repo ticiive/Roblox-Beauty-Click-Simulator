@@ -15,6 +15,7 @@ local UpdateOutfitEvent = ReplicatedStorage:WaitForChild("UpdateOutfitEvent")
 
 local dataStore    = DataStoreService:GetDataStore("ClickSimulatorData_v2")
 local playerData   = {}
+_G.PlayerData      = playerData   -- LootboxService lê daqui
 local clickTracker = {}
 
 -- ─────────────────────────────────────────────────────────────
