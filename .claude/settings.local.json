@@ -6,7 +6,9 @@
       "Bash(Sort-Object Name)",
       "Skill(update-config)",
       "Skill(update-config:*)",
-      "Bash(powershell.exe -NoProfile -Command \"git pull origin main\")"
+      "Bash(powershell.exe -NoProfile -Command \"git pull origin main\")",
+      "Bash(git pull *)",
+      "Bash(git fetch *)"
     ]
   }
 }
