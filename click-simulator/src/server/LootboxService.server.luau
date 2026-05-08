@@ -8,7 +8,7 @@ local Catalog       = require(Shared:WaitForChild("Catalog"))
 
 local UpdateStatsEvent = ReplicatedStorage:WaitForChild("UpdateStatsEvent")
 
--- Cria pasta Remotes se não existir
+-- Cria pasta Remotes (LootboxSpawner também usa essa pasta via WaitForChild)
 local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	or (function()
 		local f = Instance.new("Folder")
@@ -17,13 +17,21 @@ local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
 		return f
 	end)()
 
-local OpenLootboxEvent = Instance.new("RemoteEvent")
-OpenLootboxEvent.Name   = "OpenLootboxEvent"
-OpenLootboxEvent.Parent = Remotes
-
 local LootboxResultEvent = Instance.new("RemoteEvent")
 LootboxResultEvent.Name   = "LootboxResultEvent"
 LootboxResultEvent.Parent = Remotes
+
+local RequestPurchaseConfirmEvent = Instance.new("RemoteEvent")
+RequestPurchaseConfirmEvent.Name   = "RequestPurchaseConfirmEvent"
+RequestPurchaseConfirmEvent.Parent = Remotes
+
+local ConfirmPurchaseEvent = Instance.new("RemoteEvent")
+ConfirmPurchaseEvent.Name   = "ConfirmPurchaseEvent"
+ConfirmPurchaseEvent.Parent = Remotes
+
+local PlayLootboxAnimEvent = Instance.new("RemoteEvent")
+PlayLootboxAnimEvent.Name   = "PlayLootboxAnimEvent"
+PlayLootboxAnimEvent.Parent = Remotes
 
 -- ─────────────────────────────────────────────────────────────
 -- Equipa acessório / roupa — detecta tipo real do asset
@@ -44,7 +52,6 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 		return
 	end
 
-	-- Debug: lista filhos do model carregado
 	print("[Lootbox] LoadAsset", assetId, "→ filhos:")
 	for _, child in ipairs(model:GetChildren()) do
 		local extra = ""
@@ -56,42 +63,37 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 
 	local equipped = false
 
-	-- Shirt
 	local shirt = model:FindFirstChildOfClass("Shirt")
 	if shirt then
-		local existing = character:FindFirstChildOfClass("Shirt")
-		if existing then existing:Destroy() end
+		local ex = character:FindFirstChildOfClass("Shirt")
+		if ex then ex:Destroy() end
 		shirt.Parent = character
 		equipped = true
 	end
 
-	-- Pants
 	local pants = model:FindFirstChildOfClass("Pants")
 	if pants then
-		local existing = character:FindFirstChildOfClass("Pants")
-		if existing then existing:Destroy() end
+		local ex = character:FindFirstChildOfClass("Pants")
+		if ex then ex:Destroy() end
 		pants.Parent = character
 		equipped = true
 	end
 
-	-- ShirtGraphic (T-Shirt)
 	local tshirt = model:FindFirstChildOfClass("ShirtGraphic")
 	if tshirt then
-		local existing = character:FindFirstChildOfClass("ShirtGraphic")
-		if existing then existing:Destroy() end
+		local ex = character:FindFirstChildOfClass("ShirtGraphic")
+		if ex then ex:Destroy() end
 		tshirt.Parent = character
 		equipped = true
 	end
 
-	-- Acessórios — itera todos (um model pode ter só um, mas iteramos por segurança)
 	for _, child in ipairs(model:GetChildren()) do
 		if child:IsA("Accessory") then
-			-- Remove acessório existente do mesmo tipo para não acumular
 			local accType = child.AccessoryType
 			if accType ~= Enum.AccessoryType.Unknown then
-				for _, existing in ipairs(character:GetChildren()) do
-					if existing:IsA("Accessory") and existing.AccessoryType == accType then
-						existing:Destroy()
+				for _, ex in ipairs(character:GetChildren()) do
+					if ex:IsA("Accessory") and ex.AccessoryType == accType then
+						ex:Destroy()
 					end
 				end
 			end
@@ -101,8 +103,8 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 	end
 
 	if not equipped then
-		local primeiro = model:GetChildren()[1]
-		warn("[LootboxService] Tipo não suportado:", primeiro and primeiro.ClassName or "vazio", "| assetId:", assetId)
+		local first = model:GetChildren()[1]
+		warn("[LootboxService] Tipo não suportado:", first and first.ClassName or "vazio", "| assetId:", assetId)
 	end
 
 	model:Destroy()
@@ -115,19 +117,25 @@ end
 local playerData = nil
 
 task.spawn(function()
-	while not _G.PlayerData do
-		task.wait(0.1)
-	end
+	while not _G.PlayerData do task.wait(0.1) end
 	playerData = _G.PlayerData
 	print("[LootboxService] PlayerData referenciado.")
 end)
 
+-- Evita compra dupla enquanto animação roda (3.5s)
+local purchasing = {}
+
+Players.PlayerRemoving:Connect(function(player)
+	purchasing[player.UserId] = nil
+end)
+
 -- ─────────────────────────────────────────────────────────────
--- Evento principal: abrir caixa
+-- Fluxo de compra: cliente confirma → server valida → anima → equipa
 -- ─────────────────────────────────────────────────────────────
 
-OpenLootboxEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
-	if not playerData then return end
+ConfirmPurchaseEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
+	if not playerData                 then return end
+	if purchasing[player.UserId]      then return end
 
 	local dados = playerData[player.UserId]
 	if not dados then return end
@@ -141,9 +149,9 @@ OpenLootboxEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
 		return
 	end
 
-	-- Sorteia item — até 5 tentativas caso categorias venham vazias
+	-- Sorteia item — até 5 tentativas
 	local item
-	for attempt = 1, 5 do
+	for _ = 1, 5 do
 		item = Catalog.getRandomFromCategories(box.categories)
 		if item then break end
 		task.wait(0)
@@ -154,26 +162,31 @@ OpenLootboxEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
 		return
 	end
 
-	-- Deduz moedas
+	-- Cobra moedas e trava nova compra enquanto anima
+	purchasing[player.UserId] = true
 	dados.coins -= box.cost
+	UpdateStatsEvent:FireClient(player, dados)
 
-	-- Envia resultado ao cliente antes de equipar (equip pode demorar)
+	print(string.format("[LootboxService] %s abriu %s → %s (%d)", player.Name, box.name, item.name, item.id))
+
+	-- Todos os clientes veem a animação na caixa física
+	PlayLootboxAnimEvent:FireAllClients(box.id, { id = item.id, name = item.name, category = item.category })
+
+	-- Espera a animação terminar antes de equipar
+	task.wait(3.5)
+
+	equipAssetOnPlayer(player, item.id)
+
+	-- Resultado só para quem comprou
 	LootboxResultEvent:FireClient(player, {
-		boxId    = boxId,
+		boxId    = box.id,
 		boxName  = box.name,
 		itemId   = item.id,
 		itemName = item.name,
 		category = item.category,
 	})
 
-	UpdateStatsEvent:FireClient(player, dados)
-
-	print(string.format("[LootboxService] %s abriu %s → %s (%d)", player.Name, box.name, item.name, item.id))
-
-	-- Equipa no personagem
-	task.spawn(function()
-		equipAssetOnPlayer(player, item.id)
-	end)
+	purchasing[player.UserId] = nil
 end)
 
 print("[LootboxService] Pronto.")
