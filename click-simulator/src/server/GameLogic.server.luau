@@ -15,29 +15,109 @@ local UpdateOutfitEvent = ReplicatedStorage:WaitForChild("UpdateOutfitEvent")
 
 local dataStore    = DataStoreService:GetDataStore("ClickSimulatorData_v2")
 local playerData   = {}
-_G.PlayerData      = playerData   -- LootboxService lê daqui
+_G.PlayerData      = playerData   -- LootboxService e InventoryService lêem daqui
 local clickTracker = {}
 
 -- ─────────────────────────────────────────────────────────────
--- Outfit padrão: índice 0 de cada categoria (item gratuito)
+-- _G.Inventory — API partilhada com LootboxService e InventoryService
+-- ─────────────────────────────────────────────────────────────
+
+local MAX_INVENTORY = 200
+
+_G.Inventory = {}
+_G.Inventory.fireUpdate = function(_player) end  -- sobrescrito pelo InventoryService
+
+_G.Inventory.addItemToInventory = function(player, item)
+	local dados = playerData[player.UserId]
+	if not dados then return end
+	local key = tostring(item.id)
+	if dados.inventory[key] then return end  -- já possui
+
+	dados.inventory[key] = {
+		id       = item.id,
+		name     = item.name,
+		category = item.category,
+		ownedAt  = os.time(),
+	}
+
+	-- Limita a MAX_INVENTORY: remove não-equipados mais antigos
+	local total = 0
+	for _ in dados.inventory do total += 1 end
+
+	if total > MAX_INVENTORY then
+		local equippedIds = {}
+		for _, ids in (dados.equipped or {}) do
+			for _, id in ids do equippedIds[id] = true end
+		end
+
+		local candidates = {}
+		for k, v in dados.inventory do
+			if not equippedIds[v.id] then
+				table.insert(candidates, { key = k, t = v.ownedAt })
+			end
+		end
+		table.sort(candidates, function(a, b) return a.t < b.t end)
+
+		for i = 1, total - MAX_INVENTORY do
+			if candidates[i] then dados.inventory[candidates[i].key] = nil end
+		end
+	end
+end
+
+_G.Inventory.addToEquipped = function(player, itemId, category)
+	local dados = playerData[player.UserId]
+	if not dados then return end
+	if not dados.equipped then dados.equipped = {} end
+
+	if category == "Hats" then
+		-- Chapéus acumulam
+		if not dados.equipped.Hats then dados.equipped.Hats = {} end
+		for _, id in dados.equipped.Hats do
+			if id == itemId then return end
+		end
+		table.insert(dados.equipped.Hats, itemId)
+	else
+		-- Slot único: substitui
+		dados.equipped[category] = { itemId }
+	end
+end
+
+_G.Inventory.removeFromEquipped = function(player, itemId)
+	local dados = playerData[player.UserId]
+	if not dados or not dados.equipped then return end
+
+	for category, ids in dados.equipped do
+		for i, id in ipairs(ids) do
+			if id == itemId then
+				table.remove(ids, i)
+				if #ids == 0 then dados.equipped[category] = nil end
+				return
+			end
+		end
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- Outfit padrão
 -- ─────────────────────────────────────────────────────────────
 
 local function outfitPadrao()
 	local o = {}
 	for _, cat in GameConfig.ClothingCategories do
-		o[cat.key] = 1  -- índice 1 = primeiro item (gratuito)
+		o[cat.key] = 1
 	end
 	return o
 end
 
 local function dadosPadrao()
 	return {
-		coins        = GameConfig.StartingCoins,
-		clickPower   = GameConfig.StartingClickPower,
-		totalClicks  = 0,
-		-- { ["skin_1"] = true, ["shirt_3"] = true, ... }
+		coins         = GameConfig.StartingCoins,
+		clickPower    = GameConfig.StartingClickPower,
+		totalClicks   = 0,
 		ownedClothing = { skin_1 = true, shirt_1 = true, pants_1 = true },
 		outfit        = outfitPadrao(),
+		inventory     = {},   -- itens ganhos via lootbox
+		equipped      = {},   -- { Hair={id}, Hats={id1,id2}, Shirt={id} }
 	}
 end
 
@@ -59,16 +139,12 @@ local function aplicarOutfit(character: Model, outfit: { [string]: number })
 	local bc = character:FindFirstChildOfClass("BodyColors")
 	if not bc then return end
 
-	local corPele   = getCor("skin",  outfit.skin  or 1)
-	local corCamisa = getCor("shirt", outfit.shirt or 1)
-	local corCalca  = getCor("pants", outfit.pants or 1)
-
-	bc.HeadColor3      = corPele
-	bc.TorsoColor3     = corCamisa
-	bc.LeftArmColor3   = corCamisa
-	bc.RightArmColor3  = corCamisa
-	bc.LeftLegColor3   = corCalca
-	bc.RightLegColor3  = corCalca
+	bc.HeadColor3     = getCor("skin",  outfit.skin  or 1)
+	bc.TorsoColor3    = getCor("shirt", outfit.shirt or 1)
+	bc.LeftArmColor3  = getCor("shirt", outfit.shirt or 1)
+	bc.RightArmColor3 = getCor("shirt", outfit.shirt or 1)
+	bc.LeftLegColor3  = getCor("pants", outfit.pants or 1)
+	bc.RightLegColor3 = getCor("pants", outfit.pants or 1)
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -77,16 +153,12 @@ end
 
 local function enviarStats(player: Player)
 	local dados = playerData[player.UserId]
-	if dados then
-		UpdateStatsEvent:FireClient(player, dados)
-	end
+	if dados then UpdateStatsEvent:FireClient(player, dados) end
 end
 
 local function enviarOutfit(player: Player)
 	local dados = playerData[player.UserId]
-	if dados then
-		UpdateOutfitEvent:FireClient(player, dados.outfit, dados.ownedClothing)
-	end
+	if dados then UpdateOutfitEvent:FireClient(player, dados.outfit, dados.ownedClothing) end
 end
 
 -- ─────────────────────────────────────────────────────────────
@@ -105,15 +177,17 @@ local function carregarDados(player: Player)
 		for k, v in resultado do
 			dados[k] = v
 		end
-		-- Garante que campos novos existam em saves antigos
+		-- Migração: garante campos novos em saves antigos
 		if not dados.ownedClothing then dados.ownedClothing = dadosPadrao().ownedClothing end
 		if not dados.outfit        then dados.outfit        = outfitPadrao()               end
+		if not dados.inventory     then dados.inventory     = {}                           end
+		if not dados.equipped      then dados.equipped      = {}                           end
 		playerData[player.UserId] = dados
 		print("[GameLogic] Dados carregados para", player.Name)
 	else
 		playerData[player.UserId] = dadosPadrao()
 		if not sucesso then
-			warn("[GameLogic] Falha ao carregar dados de", player.Name, "- iniciando do zero:", resultado)
+			warn("[GameLogic] Falha ao carregar dados de", player.Name, ":", resultado)
 		else
 			print("[GameLogic] Novo jogador:", player.Name)
 		end
@@ -122,6 +196,7 @@ local function carregarDados(player: Player)
 	clickTracker[player.UserId] = { count = 0, lastReset = os.clock() }
 	enviarStats(player)
 	enviarOutfit(player)
+	-- Inventário enviado pelo InventoryService (via fireUpdate após PlayerAdded)
 end
 
 local function salvarDados(player: Player)
@@ -165,7 +240,7 @@ ClickEvent.OnServerEvent:Connect(function(player: Player)
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- Evento: Compra de upgrade de click
+-- Evento: Compra de upgrade
 -- ─────────────────────────────────────────────────────────────
 
 BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, indice: number)
@@ -177,7 +252,7 @@ BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, indice: number)
 	if not upgrade then return end
 
 	if dados.coins < upgrade.cost then
-		print("[GameLogic]", player.Name, "sem moedas suficientes para:", upgrade.name)
+		print("[GameLogic]", player.Name, "sem moedas para:", upgrade.name)
 		return
 	end
 
@@ -188,23 +263,19 @@ BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, indice: number)
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- Evento: Roupa (comprar ou equipar)
--- action = "buy"   → deduz moedas, marca como owned, equipa
--- action = "equip" → só equipa (já é owned)
+-- Evento: Roupa (sistema legado de cores)
 -- ─────────────────────────────────────────────────────────────
 
 ClothingEvent.OnServerEvent:Connect(function(player: Player, action: string, catKey: string, itemIndex: number)
 	local dados = playerData[player.UserId]
 	if not dados then return end
 
-	-- Valida catKey
 	local catConfig = nil
 	for _, cat in GameConfig.ClothingCategories do
 		if cat.key == catKey then catConfig = cat break end
 	end
 	if not catConfig then return end
 
-	-- Valida itemIndex
 	if type(itemIndex) ~= "number" or itemIndex ~= math.floor(itemIndex) then return end
 	local item = catConfig.items[itemIndex]
 	if not item then return end
@@ -212,20 +283,13 @@ ClothingEvent.OnServerEvent:Connect(function(player: Player, action: string, cat
 	local ownedKey = catKey .. "_" .. itemIndex
 
 	if action == "buy" then
-		-- Já possui?
 		if dados.ownedClothing[ownedKey] then
-			-- Só equipa
 			dados.outfit[catKey] = itemIndex
 		else
-			-- Valida moedas
-			if dados.coins < item.cost then
-				print("[GameLogic]", player.Name, "sem moedas para roupa:", item.name)
-				return
-			end
+			if dados.coins < item.cost then return end
 			dados.coins -= item.cost
 			dados.ownedClothing[ownedKey] = true
 			dados.outfit[catKey] = itemIndex
-			print("[GameLogic]", player.Name, "comprou roupa:", item.name)
 		end
 	elseif action == "equip" then
 		if not dados.ownedClothing[ownedKey] then return end
@@ -234,11 +298,8 @@ ClothingEvent.OnServerEvent:Connect(function(player: Player, action: string, cat
 		return
 	end
 
-	-- Aplica imediatamente no personagem
 	local character = player.Character
-	if character then
-		aplicarOutfit(character, dados.outfit)
-	end
+	if character then aplicarOutfit(character, dados.outfit) end
 
 	enviarStats(player)
 	enviarOutfit(player)
@@ -249,7 +310,6 @@ end)
 -- ─────────────────────────────────────────────────────────────
 
 local function onCharacterAdded(player: Player, character: Model)
-	-- Espera BodyColors existir antes de aplicar
 	task.defer(function()
 		local dados = playerData[player.UserId]
 		if dados and character.Parent then
@@ -265,7 +325,6 @@ Players.PlayerAdded:Connect(function(player: Player)
 		onCharacterAdded(player, character)
 	end)
 
-	-- Personagem já presente ao carregar
 	if player.Character then
 		onCharacterAdded(player, player.Character)
 	end

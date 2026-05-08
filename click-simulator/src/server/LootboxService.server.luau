@@ -90,13 +90,14 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 	for _, child in ipairs(model:GetChildren()) do
 		if child:IsA("Accessory") then
 			local accType = child.AccessoryType
-			if accType ~= Enum.AccessoryType.Unknown then
+			if accType ~= Enum.AccessoryType.Unknown and accType ~= Enum.AccessoryType.Hat then
 				for _, ex in ipairs(character:GetChildren()) do
 					if ex:IsA("Accessory") and ex.AccessoryType == accType then
 						ex:Destroy()
 					end
 				end
 			end
+			child:SetAttribute("AssetId", assetId)
 			humanoid:AddAccessory(child)
 			equipped = true
 		end
@@ -176,6 +177,12 @@ ConfirmPurchaseEvent.OnServerEvent:Connect(function(player: Player, boxId: strin
 	task.wait(3.5)
 
 	equipAssetOnPlayer(player, item.id)
+
+	if _G.Inventory then
+		_G.Inventory.addItemToInventory(player, item)
+		_G.Inventory.addToEquipped(player, item.id, item.category)
+		_G.Inventory.fireUpdate(player)
+	end
 
 	-- Resultado só para quem comprou
 	LootboxResultEvent:FireClient(player, {

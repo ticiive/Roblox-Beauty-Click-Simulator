@@ -5,13 +5,8 @@ local Workspace         = game:GetService("Workspace")
 local Shared        = ReplicatedStorage:WaitForChild("Shared")
 local LootboxConfig = require(Shared:WaitForChild("LootboxConfig"))
 
--- LootboxService cria o Remotes e o evento; espera aqui pra garantir ordem
 local Remotes                    = ReplicatedStorage:WaitForChild("Remotes")
 local RequestPurchaseConfirmEvent = Remotes:WaitForChild("RequestPurchaseConfirmEvent")
-
--- ─────────────────────────────────────────────────────────────
--- Pasta isolada — não toca em nada fora dela
--- ─────────────────────────────────────────────────────────────
 
 local lootboxFolder = Instance.new("Folder")
 lootboxFolder.Name   = "Lootboxes"
@@ -25,8 +20,11 @@ local function colorizeModel(root, color)
 	local targets = root:IsA("BasePart") and { root } or root:GetDescendants()
 	for _, p in targets do
 		if p:IsA("BasePart") then
-			p.Color    = color
-			p.Material = Enum.Material.Neon
+			p.Transparency = 0
+			local _, s, _ = p.Color:ToHSV()
+			if s < 0.15 then
+				p.Color = color
+			end
 		end
 	end
 end
@@ -42,7 +40,7 @@ local function anchorModel(root)
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Caixa fallback (Part simples, caso o mesh não carregue)
+-- Caixa fallback
 -- ─────────────────────────────────────────────────────────────
 
 local function criarFallback(box)
@@ -63,6 +61,43 @@ local function criarFallback(box)
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- Detecta parede esquerda (menor X) com 5 tentativas
+-- ─────────────────────────────────────────────────────────────
+
+local function findLeftWall()
+	for attempt = 1, 5 do
+		local bestPart = nil
+		local bestX = math.huge
+
+		for _, obj in Workspace:GetDescendants() do
+			if obj:IsA("BasePart") and obj.Anchored then
+				local sz = obj.Size
+				if sz.Y > 8 and (sz.Z > 20 or sz.X > 20) then
+					if obj.Position.X < bestX then
+						bestX = obj.Position.X
+						bestPart = obj
+					end
+				end
+			end
+		end
+
+		if bestPart then
+			print(string.format("[LootboxSpawner] Parede esq: %s  pos=%s  size=%s  (tentativa %d)",
+				bestPart.Name, tostring(bestPart.Position), tostring(bestPart.Size), attempt))
+			return bestPart
+		end
+
+		if attempt < 5 then
+			warn(string.format("[LootboxSpawner] Tentativa %d: parede não encontrada, aguardando 1s...", attempt))
+			task.wait(1)
+		end
+	end
+
+	warn("[LootboxSpawner] Parede não encontrada após 5 tentativas — usando SpawnOrigin padrão")
+	return nil
+end
+
+-- ─────────────────────────────────────────────────────────────
 -- Carrega mesh template uma vez
 -- ─────────────────────────────────────────────────────────────
 
@@ -75,9 +110,18 @@ end)
 if ok and loaded then
 	local child = loaded:GetChildren()[1]
 	if child then
-		child.Parent = nil  -- tira do container antes de destruí-lo
+		print("[LootboxSpawner] Mesh carregado:", child.Name, "|", child.ClassName)
+		print("[LootboxSpawner] Descendentes do mesh:")
+		for _, desc in child:GetDescendants() do
+			if desc:IsA("BasePart") then
+				local sm = desc:FindFirstChildOfClass("SpecialMesh")
+				local meshId = sm and (" MeshId=" .. sm.MeshId) or ""
+				print(string.format("  [%s] %s | Size=%s | Transp=%.2f%s",
+					desc.ClassName, desc.Name, tostring(desc.Size), desc.Transparency, meshId))
+			end
+		end
+		child.Parent = nil
 		meshTemplate = child
-		print("[LootboxSpawner] Mesh carregado:", meshTemplate.Name, "|", meshTemplate.ClassName)
 	else
 		warn("[LootboxSpawner] Asset vazio — usando fallback")
 	end
@@ -87,27 +131,51 @@ else
 end
 
 -- ─────────────────────────────────────────────────────────────
+-- Calcula posições ao longo da parede esquerda
+-- ─────────────────────────────────────────────────────────────
+
+local wall = findLeftWall()
+local N    = #LootboxConfig.Boxes
+
+-- Direção que as caixas devem olhar (para dentro do mapa, afastando da parede esq.)
+local lookDir = Vector3.new(1, 0, 0)
+
+-- ─────────────────────────────────────────────────────────────
 -- Spawna cada caixa
 -- ─────────────────────────────────────────────────────────────
 
-for _, box in LootboxConfig.Boxes do
+for i, box in ipairs(LootboxConfig.Boxes) do
+	local pos
+
+	if wall then
+		local innerX = wall.Position.X + wall.Size.X / 2 + 8
+		local groundY = wall.Position.Y - wall.Size.Y / 2
+		local zPos = wall.Position.Z + (i - (N + 1) / 2) * 12
+		pos = Vector3.new(innerX, groundY + 5, zPos)
+	else
+		pos = LootboxConfig.SpawnOrigin + box.spawnOffset
+	end
+
 	local model
 
 	if meshTemplate then
 		local clone = meshTemplate:Clone()
 		clone.Name = box.id
 
-		-- Escala
-		if clone:IsA("Model") then
-			clone:ScaleTo(box.scale)
-		elseif clone:IsA("BasePart") then
-			clone.Size = clone.Size * box.scale
+		local scaleOk = pcall(function()
+			if clone:IsA("Model") then
+				clone:ScaleTo(box.scale)
+			elseif clone:IsA("BasePart") then
+				clone.Size = clone.Size * box.scale
+			end
+		end)
+		if not scaleOk then
+			warn("[LootboxSpawner] ScaleTo falhou para", box.id)
 		end
 
 		colorizeModel(clone, box.color)
 		anchorModel(clone)
 
-		-- Garante que é um Model para facilitar o PivotTo
 		if clone:IsA("BasePart") then
 			local wrapper = Instance.new("Model")
 			wrapper.Name = box.id
@@ -116,22 +184,21 @@ for _, box in LootboxConfig.Boxes do
 			model = wrapper
 		else
 			model = clone
+			if not model.PrimaryPart then
+				model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart", true)
+			end
 		end
 	else
 		model = criarFallback(box)
 	end
 
-	-- Posição
-	local pos = LootboxConfig.SpawnOrigin + box.spawnOffset
-	model:PivotTo(CFrame.new(pos))
+	model:PivotTo(CFrame.lookAt(pos, pos + lookDir))
 	model.Parent = lootboxFolder
 
-	-- Parte central para efeitos
 	local centerPart = model.PrimaryPart
 		or model:FindFirstChildWhichIsA("BasePart", true)
 
 	if centerPart then
-		-- Luz pontual
 		local light = Instance.new("PointLight")
 		light.Color      = box.glowColor
 		light.Brightness = 2
@@ -139,7 +206,6 @@ for _, box in LootboxConfig.Boxes do
 		light.Shadows    = true
 		light.Parent     = centerPart
 
-		-- Partículas sutis subindo
 		local particles = Instance.new("ParticleEmitter")
 		particles.Color          = ColorSequence.new(box.glowColor)
 		particles.LightEmission  = 0.8
@@ -159,8 +225,11 @@ for _, box in LootboxConfig.Boxes do
 		particles.Parent         = centerPart
 	end
 
-	-- Placa de ativação à frente da caixa
-	local padPos = pos + LootboxConfig.PadOffset
+	-- Placa de ativação à frente da caixa (na direção lookDir)
+	local padPos = pos
+		+ lookDir        * LootboxConfig.PadOffset.Z
+		+ Vector3.new(0, LootboxConfig.PadOffset.Y, 0)
+
 	local pad = Instance.new("Part")
 	pad.Name         = "Pad"
 	pad.Size         = LootboxConfig.PadSize
@@ -228,7 +297,6 @@ for _, box in LootboxConfig.Boxes do
 	print(string.format("[LootboxSpawner] '%s' em %s", box.id, tostring(pos)))
 end
 
--- Limpa template da memória
 if meshTemplate then meshTemplate:Destroy() end
 
 print(string.format("[LootboxSpawner] %d caixas spawnadas.", #LootboxConfig.Boxes))
