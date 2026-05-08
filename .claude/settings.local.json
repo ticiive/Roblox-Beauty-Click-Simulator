@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Admin\\\\OneDrive\\\\Área de Trabalho\\\\projetosroblox\\\\Roblox-Beauty-Click-Simulator\\\\.claude\\\\worktrees\\\\crazy-taussig-e20bc8\" -Depth 0)",
+      "Bash(Select-Object Name, PSIsContainer)",
+      "Bash(Sort-Object Name)"
+    ]
+  }
+}
