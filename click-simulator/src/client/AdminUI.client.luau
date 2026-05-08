@@ -10,11 +10,13 @@ local AdminConfig = require(Shared:WaitForChild("AdminConfig"))
 -- Sai imediatamente se não for admin
 if not AdminConfig.isAdmin(LocalPlayer.UserId) then return end
 
-local Remotes        = ReplicatedStorage:WaitForChild("Remotes")
-local GetCatalogFunc = Remotes:WaitForChild("GetCatalogFunc")
-local BanItemEvent   = Remotes:WaitForChild("BanItemEvent")
-local UnbanItemEvent = Remotes:WaitForChild("UnbanItemEvent")
-local BanConfirmEvent= Remotes:WaitForChild("BanConfirmEvent")
+local Remotes               = ReplicatedStorage:WaitForChild("Remotes")
+local GetCatalogFunc        = Remotes:WaitForChild("GetCatalogFunc")
+local BanItemEvent          = Remotes:WaitForChild("BanItemEvent")
+local UnbanItemEvent        = Remotes:WaitForChild("UnbanItemEvent")
+local BanConfirmEvent       = Remotes:WaitForChild("BanConfirmEvent")
+local AdminEquipItemEvent   = Remotes:WaitForChild("AdminEquipItemEvent")
+local AdminEquipConfirmEvent= Remotes:WaitForChild("AdminEquipConfirmEvent")
 
 -- ─────────────────────────────────────────────────────────────
 -- Estado
@@ -23,7 +25,8 @@ local BanConfirmEvent= Remotes:WaitForChild("BanConfirmEvent")
 local catalogData    = {}   -- { [catName] = { {id, name, price}, ... } }
 local blacklistSet   = {}   -- { [id] = true }
 local currentTab     = nil
-local pendingActions = {}   -- { [id] = true } — aguardando confirmação
+local pendingActions = {}   -- { [id] = true } — aguardando ban/unban
+local pendingEquip   = {}   -- { [id] = true } — aguardando equip
 local loadedTabs     = {}   -- { [catName] = true } — já renderizou a lista
 
 local CATEGORIES = {
@@ -294,11 +297,11 @@ local function buildRow(item, catName, order)
 	priceLbl.ZIndex = 24
 	priceLbl.Parent = row
 
-	-- Badge de status
+	-- Badge de status (recuado para abrir espaço ao botão Equipar)
 	local badge     = Instance.new("TextLabel")
 	badge.Name      = "StatusBadge"
 	badge.Size      = UDim2.fromOffset(70, 22)
-	badge.Position  = UDim2.new(1, -165, 0.5, -11)
+	badge.Position  = UDim2.new(1, -250, 0.5, -11)
 	badge.Text      = isBanned and "🚫 Banido" or "✅ Ativo"
 	badge.TextSize  = 11
 	badge.Font      = Enum.Font.GothamBold
@@ -309,7 +312,30 @@ local function buildRow(item, catName, order)
 	badge.Parent    = row
 	Instance.new("UICorner", badge).CornerRadius = UDim.new(0, 4)
 
-	-- Botão ação
+	-- Botão 👤 Equipar
+	local equipBtn  = Instance.new("TextButton")
+	equipBtn.Name   = "EquipBtn"
+	equipBtn.Size   = UDim2.fromOffset(80, 26)
+	equipBtn.Position = UDim2.new(1, -174, 0.5, -13)
+	equipBtn.Text   = "👤 Equipar"
+	equipBtn.TextSize   = 11
+	equipBtn.Font       = Enum.Font.GothamBold
+	equipBtn.TextColor3 = Color3.new(1, 1, 1)
+	equipBtn.BackgroundColor3 = Color3.fromRGB(30, 80, 160)
+	equipBtn.BorderSizePixel  = 0
+	equipBtn.ZIndex = 24
+	equipBtn.Parent = row
+	Instance.new("UICorner", equipBtn).CornerRadius = UDim.new(0, 5)
+
+	equipBtn.Activated:Connect(function()
+		if pendingEquip[item.id] then return end
+		pendingEquip[item.id] = true
+		equipBtn.Text   = "..."
+		equipBtn.Active = false
+		AdminEquipItemEvent:FireServer(item.id, catName)
+	end)
+
+	-- Botão ban/unban
 	local actionBtn = Instance.new("TextButton")
 	actionBtn.Name  = "ActionBtn"
 	actionBtn.Size  = UDim2.fromOffset(82, 26)
@@ -438,6 +464,43 @@ BanConfirmEvent.OnClientEvent:Connect(function(itemId: number, isBanned: boolean
 					renderTab(currentTab)
 					return
 				end
+			end
+		end
+	end
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- Confirmação de equip
+-- ─────────────────────────────────────────────────────────────
+
+AdminEquipConfirmEvent.OnClientEvent:Connect(function(itemId: number, success: boolean)
+	pendingEquip[itemId] = nil
+
+	-- Encontra o nome do item no catálogo para o toast
+	local itemName = tostring(itemId)
+	if currentTab then
+		local list = catalogData[currentTab]
+		if list then
+			for _, item in ipairs(list) do
+				if item.id == itemId then itemName = item.name; break end
+			end
+		end
+	end
+
+	if success then
+		showToast("✅ " .. itemName:sub(1, 28) .. " equipado!")
+	else
+		showToast("❌ Erro ao equipar " .. itemName:sub(1, 22))
+	end
+
+	-- Reativa o botão Equipar na row correspondente
+	if currentTab then
+		local row = listFrame:FindFirstChild("Row_" .. tostring(itemId))
+		if row then
+			local btn = row:FindFirstChild("EquipBtn")
+			if btn then
+				btn.Text   = "👤 Equipar"
+				btn.Active = true
 			end
 		end
 	end

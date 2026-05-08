@@ -55,10 +55,12 @@ local function getOrCreate(name: string, className: string)
 	return obj
 end
 
-local GetCatalogFunc   = getOrCreate("GetCatalogFunc",   "RemoteFunction")
-local BanItemEvent     = getOrCreate("BanItemEvent",     "RemoteEvent")
-local UnbanItemEvent   = getOrCreate("UnbanItemEvent",   "RemoteEvent")
-local BanConfirmEvent  = getOrCreate("BanConfirmEvent",  "RemoteEvent")
+local GetCatalogFunc        = getOrCreate("GetCatalogFunc",        "RemoteFunction")
+local BanItemEvent          = getOrCreate("BanItemEvent",          "RemoteEvent")
+local UnbanItemEvent        = getOrCreate("UnbanItemEvent",        "RemoteEvent")
+local BanConfirmEvent       = getOrCreate("BanConfirmEvent",       "RemoteEvent")
+local AdminEquipItemEvent   = getOrCreate("AdminEquipItemEvent",   "RemoteEvent")
+local AdminEquipConfirmEvent= getOrCreate("AdminEquipConfirmEvent","RemoteEvent")
 
 -- ─────────────────────────────────────────────────────────────
 -- GetCatalog — retorna catálogo + blacklist ao admin
@@ -128,6 +130,58 @@ UnbanItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 	saveBlacklist()
 	print(string.format("[AdminService] Item %d restaurado por %s", itemId, player.Name))
 	BanConfirmEvent:FireClient(player, itemId, false)  -- false = ativo
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- AdminEquipItem — equipa item no avatar do admin (sem cobrar)
+-- ─────────────────────────────────────────────────────────────
+
+AdminEquipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number, category: string)
+	if not AdminConfig.isAdmin(player.UserId) then
+		warn("[AdminService] AdminEquip negado:", player.Name)
+		return
+	end
+	if type(itemId) ~= "number" or type(category) ~= "string" then return end
+
+	-- Aguarda _G.EquipAsset ficar disponível (LootboxService pode ainda estar iniciando)
+	local timeout = 0
+	while not _G.EquipAsset and timeout < 5 do
+		task.wait(0.1)
+		timeout += 0.1
+	end
+
+	if not _G.EquipAsset then
+		warn("[AdminService] _G.EquipAsset indisponível após 5s")
+		AdminEquipConfirmEvent:FireClient(player, itemId, false)
+		return
+	end
+
+	-- Valida que o item existe no catálogo
+	local list = (Catalog :: any)[category]
+	local found = false
+	if list then
+		for _, item in ipairs(list) do
+			if item.id == itemId then found = true; break end
+		end
+	end
+	if not found then
+		warn(string.format("[AdminService] Item %d não encontrado em %s", itemId, category))
+		AdminEquipConfirmEvent:FireClient(player, itemId, false)
+		return
+	end
+
+	local ok, err = pcall(function()
+		_G.EquipAsset(player, itemId)
+	end)
+
+	if not ok then
+		warn("[AdminService] Erro ao equipar item", itemId, ":", err)
+		AdminEquipConfirmEvent:FireClient(player, itemId, false)
+		return
+	end
+
+	print(string.format("[AdminService] Admin %s equipou item %d (%s)", player.Name, itemId, category))
+	AdminEquipConfirmEvent:FireClient(player, itemId, true)
 end)
 
 print("[AdminService] Pronto.")

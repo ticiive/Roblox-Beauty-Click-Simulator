@@ -104,6 +104,8 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 	model:Destroy()
 end
 
+_G.EquipAsset = equipAssetOnPlayer
+
 -- ─────────────────────────────────────────────────────────────
 -- Aguarda _G.PlayerData (GameLogic inicia junto)
 -- ─────────────────────────────────────────────────────────────
