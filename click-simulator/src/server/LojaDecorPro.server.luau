@@ -9,7 +9,8 @@
 local QUANTIDADE_ESPELHOS    = 4
 local QUANTIDADE_MANEQUINS   = 3
 local QUANTIDADE_ARARAS      = 3
-local QUANTIDADE_PRATELEIRAS = 6
+-- AJUSTE: mínimo recomendado 12; distribuído em 3 fileiras paralelas com ≥6 studs entre prateleiras
+local QUANTIDADE_PRATELEIRAS = 12
 
 local POSICAO_INICIAL  = Vector3.new(0, 0, 0)  -- centro da loja
 local LOJA_LARGURA     = 40   -- eixo X (paredes esquerda/direita)
@@ -74,59 +75,68 @@ end
 -- ┌─────────────────────────────────────────────────────────────┐
 -- │ 1. ESPELHOS                                                 │
 -- └─────────────────────────────────────────────────────────────┘
--- Os espelhos ficam nas paredes laterais (eixo X).
--- O espelho é fino no eixo X, largo no Z e alto no Y.
--- A moldura é formada por 4 barras ao redor da superfície.
+-- AJUSTE: espelhos agora ficam grudados em TODAS as 4 paredes (Norte/Sul/
+-- Leste/Oeste), com a parte de trás encostada na parede e a face apontando
+-- para o interior da loja. A orientação do slab muda conforme a parede:
+--   • Paredes Leste/Oeste (eixo X)  → fino em X, largo em Z, alto em Y
+--   • Paredes Norte/Sul   (eixo Z)  → fino em Z, largo em X, alto em Y
+-- A distribuição é uniforme: QUANTIDADE_ESPELHOS / 4 por parede (com sobra
+-- direcionada para Norte → Sul → Leste → Oeste, nessa ordem).
 
-local ESP_LARG  = 3     -- largura (ao longo da parede, eixo Z)
+local ESP_LARG  = 3     -- largura (ao longo da parede)
 local ESP_ALT   = 5     -- altura (eixo Y)
-local ESP_PROF  = 0.15  -- espessura (eixo X, perpendicular à parede)
+local ESP_PROF  = 0.15  -- espessura (perpendicular à parede)
 local MOL_ESP   = 0.3   -- espessura da moldura
 
 local COR_ESP   = Color3.fromRGB(190, 215, 230)  -- vidro prateado
 local COR_MOL   = Color3.fromRGB(212, 175,  55)  -- dourado
 
-local function criarEspelho(cx, cy, cz)
+-- AJUSTE: parede recebida como string "N"/"S"/"L"/"O" — define orientação do slab
+local function criarEspelho(cx, cy, cz, parede)
 	local m      = Instance.new("Model")
-	m.Name       = "Espelho"
+	m.Name       = "Espelho_" .. parede
 	m.Parent     = raiz
 
-	-- Superfície reflexiva (thin no X, wide no Z, tall no Y)
-	local sup    = novaPart(m, "Superficie",
-		Vector3.new(ESP_PROF, ESP_ALT, ESP_LARG),
-		COR_ESP, Enum.Material.Glass,
-		CFrame.new(cx, cy, cz))
+	local fd = ESP_PROF + 0.02              -- profundidade da moldura (um pouco mais espessa)
+	local eh = ESP_ALT  / 2 + MOL_ESP / 2  -- offset vertical para topo/base
+	local ew = ESP_LARG / 2 + MOL_ESP / 2  -- offset lateral para esq/dir
+
+	-- Tamanhos e offsets variam conforme a parede
+	local espSize, topoSize, lateralSize
+	local topoCF, baseCF, esqCF, dirCF
+
+	if parede == "L" or parede == "O" then
+		-- AJUSTE: paredes Leste/Oeste — slab fino em X
+		espSize     = Vector3.new(ESP_PROF, ESP_ALT, ESP_LARG)
+		topoSize    = Vector3.new(fd, MOL_ESP, ESP_LARG + MOL_ESP * 2)
+		lateralSize = Vector3.new(fd, ESP_ALT + MOL_ESP * 2, MOL_ESP)
+		topoCF      = CFrame.new(0,  eh, 0)
+		baseCF      = CFrame.new(0, -eh, 0)
+		esqCF       = CFrame.new(0,   0, -ew)
+		dirCF       = CFrame.new(0,   0,  ew)
+	else
+		-- AJUSTE: paredes Norte/Sul — slab fino em Z
+		espSize     = Vector3.new(ESP_LARG, ESP_ALT, ESP_PROF)
+		topoSize    = Vector3.new(ESP_LARG + MOL_ESP * 2, MOL_ESP, fd)
+		lateralSize = Vector3.new(MOL_ESP, ESP_ALT + MOL_ESP * 2, fd)
+		topoCF      = CFrame.new(  0,  eh, 0)
+		baseCF      = CFrame.new(  0, -eh, 0)
+		esqCF       = CFrame.new(-ew,   0, 0)
+		dirCF       = CFrame.new( ew,   0, 0)
+	end
+
+	local cf  = CFrame.new(cx, cy, cz)
+
+	-- Superfície reflexiva (back encostada na parede, face para o interior)
+	local sup = novaPart(m, "Superficie", espSize, COR_ESP, Enum.Material.Glass, cf)
 	sup.Reflectance = 0.85
 	m.PrimaryPart   = sup
 
-	-- Posições das barras da moldura (sem offset X: envolve o espelho por todos os lados)
-	local eh = ESP_ALT  / 2 + MOL_ESP / 2  -- offset vertical para topo/base
-	local ew = ESP_LARG / 2 + MOL_ESP / 2  -- offset lateral para esq/dir
-	local fd = ESP_PROF + 0.02              -- profundidade da moldura (um pouco mais espessa)
-
-	-- Barra superior
-	novaPart(m, "MolduraTopo",
-		Vector3.new(fd, MOL_ESP, ESP_LARG + MOL_ESP * 2),
-		COR_MOL, Enum.Material.SmoothPlastic,
-		CFrame.new(cx, cy + eh, cz))
-
-	-- Barra inferior
-	novaPart(m, "MolduraBase",
-		Vector3.new(fd, MOL_ESP, ESP_LARG + MOL_ESP * 2),
-		COR_MOL, Enum.Material.SmoothPlastic,
-		CFrame.new(cx, cy - eh, cz))
-
-	-- Barra esquerda (–Z)
-	novaPart(m, "MolduraEsq",
-		Vector3.new(fd, ESP_ALT + MOL_ESP * 2, MOL_ESP),
-		COR_MOL, Enum.Material.SmoothPlastic,
-		CFrame.new(cx, cy, cz - ew))
-
-	-- Barra direita (+Z)
-	novaPart(m, "MolduraDir",
-		Vector3.new(fd, ESP_ALT + MOL_ESP * 2, MOL_ESP),
-		COR_MOL, Enum.Material.SmoothPlastic,
-		CFrame.new(cx, cy, cz + ew))
+	-- Moldura ao redor (4 barras orientadas pela parede)
+	novaPart(m, "MolduraTopo", topoSize,    COR_MOL, Enum.Material.SmoothPlastic, cf * topoCF)
+	novaPart(m, "MolduraBase", topoSize,    COR_MOL, Enum.Material.SmoothPlastic, cf * baseCF)
+	novaPart(m, "MolduraEsq",  lateralSize, COR_MOL, Enum.Material.SmoothPlastic, cf * esqCF)
+	novaPart(m, "MolduraDir",  lateralSize, COR_MOL, Enum.Material.SmoothPlastic, cf * dirCF)
 
 	return m
 end
@@ -137,21 +147,39 @@ local function spawnEspelhos()
 	-- Centro da moldura a 3.5 studs do chão → base em Y+1, topo em Y+6
 	local cy  = POSICAO_INICIAL.Y + 3.5
 
-	local metade   = math.ceil(QUANTIDADE_ESPELHOS / 2)
-	local restante = QUANTIDADE_ESPELHOS - metade
+	-- AJUSTE: distribui espelhos uniformemente nas 4 paredes
+	local base  = math.floor(QUANTIDADE_ESPELHOS / 4)
+	local resto = QUANTIDADE_ESPELHOS - base * 4
+	local nN    = base + (resto >= 1 and 1 or 0)
+	local nS    = base + (resto >= 2 and 1 or 0)
+	local nL    = base + (resto >= 3 and 1 or 0)
+	local nO    = base
 
-	-- Parede esquerda (X mínimo), superfície encostada na parede
-	local xEsq = cx0 - LOJA_LARGURA / 2 + ESP_PROF / 2 + 0.05
-	for i = 1, metade do
-		local z = cz0 - LOJA_COMPRIMENTO / 2 + (LOJA_COMPRIMENTO / (metade + 1)) * i
-		criarEspelho(xEsq, cy, z)
+	-- Coordenadas das paredes (face do espelho aponta para dentro da loja)
+	local zNorte = cz0 - LOJA_COMPRIMENTO / 2 + ESP_PROF / 2 + 0.05
+	local zSul   = cz0 + LOJA_COMPRIMENTO / 2 - ESP_PROF / 2 - 0.05
+	local xLeste = cx0 + LOJA_LARGURA   / 2 - ESP_PROF / 2 - 0.05
+	local xOeste = cx0 - LOJA_LARGURA   / 2 + ESP_PROF / 2 + 0.05
+
+	-- Norte: varia X (parede "horizontal")
+	for i = 1, nN do
+		local x = cx0 - LOJA_LARGURA / 2 + (LOJA_LARGURA / (nN + 1)) * i
+		criarEspelho(x, cy, zNorte, "N")
 	end
-
-	-- Parede direita (X máximo)
-	local xDir = cx0 + LOJA_LARGURA / 2 - ESP_PROF / 2 - 0.05
-	for i = 1, restante do
-		local z = cz0 - LOJA_COMPRIMENTO / 2 + (LOJA_COMPRIMENTO / (restante + 1)) * i
-		criarEspelho(xDir, cy, z)
+	-- Sul: varia X
+	for i = 1, nS do
+		local x = cx0 - LOJA_LARGURA / 2 + (LOJA_LARGURA / (nS + 1)) * i
+		criarEspelho(x, cy, zSul, "S")
+	end
+	-- Leste: varia Z (parede "vertical")
+	for i = 1, nL do
+		local z = cz0 - LOJA_COMPRIMENTO / 2 + (LOJA_COMPRIMENTO / (nL + 1)) * i
+		criarEspelho(xLeste, cy, z, "L")
+	end
+	-- Oeste: varia Z
+	for i = 1, nO do
+		local z = cz0 - LOJA_COMPRIMENTO / 2 + (LOJA_COMPRIMENTO / (nO + 1)) * i
+		criarEspelho(xOeste, cy, z, "O")
 	end
 end
 
@@ -401,27 +429,42 @@ local function criarPrateleira(posicao, tamanho)
 	return m
 end
 
+-- AJUSTE: prateleiras agora ficam em 3 fileiras paralelas em X — uma corredor à
+-- esquerda (entre parede oeste e manequins), uma central e uma à direita (entre
+-- araras e parede leste). Cada fileira é alinhada em Z com espaçamento mínimo
+-- de 6 studs entre prateleiras adjacentes. Os corredores X = ±10 ficam livres
+-- para os manequins (X≈-10) e araras (X≈+10).
+local FILEIRAS_PRATELEIRAS_X = { -16, 0, 16 }
+local ESPACAMENTO_MIN_PRATELEIRAS = 6  -- AJUSTE: mínimo de studs entre prateleiras
+
 local function spawnPrateleiras()
 	local cx0 = POSICAO_INICIAL.X
 	local cz0 = POSICAO_INICIAL.Z
 	local gy  = POSICAO_INICIAL.Y
 	local t   = Vector3.new(4, 5, 1)
 
-	-- Distribuição em grade automática no centro da loja
-	local cols = math.ceil(math.sqrt(QUANTIDADE_PRATELEIRAS))
-	local rows = math.ceil(QUANTIDADE_PRATELEIRAS / cols)
-
-	local spacingX = LOJA_LARGURA  / (cols + 1)
-	local spacingZ = LOJA_COMPRIMENTO / (rows + 1)
+	-- AJUSTE: distribui QUANTIDADE_PRATELEIRAS entre as fileiras X de forma equilibrada
+	local numFileiras = #FILEIRAS_PRATELEIRAS_X
+	local base        = math.floor(QUANTIDADE_PRATELEIRAS / numFileiras)
+	local resto       = QUANTIDADE_PRATELEIRAS - base * numFileiras
 
 	local count = 0
-	for row = 1, rows do
-		for col = 1, cols do
-			count += 1
-			if count > QUANTIDADE_PRATELEIRAS then break end
-			local x = cx0 - LOJA_LARGURA / 2 + spacingX * col
-			local z = cz0 - LOJA_COMPRIMENTO / 2 + spacingZ * row
-			criarPrateleira(Vector3.new(x, gy, z), t)
+	for idx, x in ipairs(FILEIRAS_PRATELEIRAS_X) do
+		-- AJUSTE: distribui sobra (resto) nas primeiras fileiras
+		local porFileira = base + (idx <= resto and 1 or 0)
+		if porFileira > 0 then
+			local spacingZ = LOJA_COMPRIMENTO / (porFileira + 1)
+			-- AJUSTE: avisa se o espaçamento ficou abaixo do mínimo recomendado
+			if spacingZ < ESPACAMENTO_MIN_PRATELEIRAS then
+				warn(string.format(
+					"[LojaDecorPro] Espaçamento entre prateleiras (%.1f) na fileira X=%d abaixo do mínimo (%d). Reduza QUANTIDADE_PRATELEIRAS ou aumente LOJA_COMPRIMENTO.",
+					spacingZ, x, ESPACAMENTO_MIN_PRATELEIRAS))
+			end
+			for j = 1, porFileira do
+				count += 1
+				local z = cz0 - LOJA_COMPRIMENTO / 2 + spacingZ * j
+				criarPrateleira(Vector3.new(x, gy, z), t)
+			end
 		end
 	end
 end
