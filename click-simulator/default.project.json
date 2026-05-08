@@ -22,21 +22,6 @@
         "$className": "Folder",
         "$path": "src/shared"
       }
-    },
-
-    "Workspace": {
-      "$className": "Workspace",
-      "$properties": {
-        "FilteringEnabled": true
-      }
-    },
-
-    "Lighting": {
-      "$className": "Lighting"
-    },
-
-    "SoundService": {
-      "$className": "SoundService"
     }
   }
 }

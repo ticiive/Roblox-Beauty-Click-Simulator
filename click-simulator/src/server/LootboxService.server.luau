@@ -6,7 +6,6 @@ local Shared        = ReplicatedStorage:WaitForChild("Shared")
 local LootboxConfig = require(Shared:WaitForChild("LootboxConfig"))
 local Catalog       = require(Shared:WaitForChild("Catalog"))
 
--- RemoteEvents criados pelo Setup.server.luau
 local UpdateStatsEvent = ReplicatedStorage:WaitForChild("UpdateStatsEvent")
 
 -- Cria pasta Remotes se não existir
@@ -27,10 +26,10 @@ LootboxResultEvent.Name   = "LootboxResultEvent"
 LootboxResultEvent.Parent = Remotes
 
 -- ─────────────────────────────────────────────────────────────
--- Equipa acessório / roupa no personagem
+-- Equipa acessório / roupa — detecta tipo real do asset
 -- ─────────────────────────────────────────────────────────────
 
-local function equipAssetOnPlayer(player: Player, assetId: number, assetCategory: string)
+local function equipAssetOnPlayer(player: Player, assetId: number)
 	local character = player.Character
 	if not character then return end
 
@@ -45,43 +44,72 @@ local function equipAssetOnPlayer(player: Player, assetId: number, assetCategory
 		return
 	end
 
-	local assetType = LootboxConfig.AssetTypeByCategory[assetCategory]
+	-- Debug: lista filhos do model carregado
+	print("[Lootbox] LoadAsset", assetId, "→ filhos:")
+	for _, child in ipairs(model:GetChildren()) do
+		local extra = ""
+		if child:IsA("Accessory") then
+			extra = " AccessoryType=" .. tostring(child.AccessoryType)
+		end
+		print("  -", child.ClassName, child.Name, extra)
+	end
 
-	if assetType == "Shirt" then
-		local shirt = model:FindFirstChildOfClass("Shirt")
-		if shirt then
-			local existing = character:FindFirstChildOfClass("Shirt")
-			if existing then existing:Destroy() end
-			shirt.Parent = character
+	local equipped = false
+
+	-- Shirt
+	local shirt = model:FindFirstChildOfClass("Shirt")
+	if shirt then
+		local existing = character:FindFirstChildOfClass("Shirt")
+		if existing then existing:Destroy() end
+		shirt.Parent = character
+		equipped = true
+	end
+
+	-- Pants
+	local pants = model:FindFirstChildOfClass("Pants")
+	if pants then
+		local existing = character:FindFirstChildOfClass("Pants")
+		if existing then existing:Destroy() end
+		pants.Parent = character
+		equipped = true
+	end
+
+	-- ShirtGraphic (T-Shirt)
+	local tshirt = model:FindFirstChildOfClass("ShirtGraphic")
+	if tshirt then
+		local existing = character:FindFirstChildOfClass("ShirtGraphic")
+		if existing then existing:Destroy() end
+		tshirt.Parent = character
+		equipped = true
+	end
+
+	-- Acessórios — itera todos (um model pode ter só um, mas iteramos por segurança)
+	for _, child in ipairs(model:GetChildren()) do
+		if child:IsA("Accessory") then
+			-- Remove acessório existente do mesmo tipo para não acumular
+			local accType = child.AccessoryType
+			if accType ~= Enum.AccessoryType.Unknown then
+				for _, existing in ipairs(character:GetChildren()) do
+					if existing:IsA("Accessory") and existing.AccessoryType == accType then
+						existing:Destroy()
+					end
+				end
+			end
+			humanoid:AddAccessory(child)
+			equipped = true
 		end
-	elseif assetType == "Pants" then
-		local pants = model:FindFirstChildOfClass("Pants")
-		if pants then
-			local existing = character:FindFirstChildOfClass("Pants")
-			if existing then existing:Destroy() end
-			pants.Parent = character
-		end
-	elseif assetType == "TShirt" then
-		-- T-shirts são aplicadas via shirt gráfica (apenas visual)
-		local shirt = model:FindFirstChildOfClass("Shirt")
-		if shirt then
-			local existing = character:FindFirstChildOfClass("Shirt")
-			if existing then existing:Destroy() end
-			shirt.Parent = character
-		end
-	else
-		-- Acessório (Hat, Hair, Face, Neck, Shoulder, Waist, etc.)
-		local accessory = model:FindFirstChildOfClass("Accessory")
-		if accessory then
-			humanoid:AddAccessory(accessory)
-		end
+	end
+
+	if not equipped then
+		local primeiro = model:GetChildren()[1]
+		warn("[LootboxService] Tipo não suportado:", primeiro and primeiro.ClassName or "vazio", "| assetId:", assetId)
 	end
 
 	model:Destroy()
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Aguarda _G.PlayerData ficar disponível (GameLogic inicia junto)
+-- Aguarda _G.PlayerData (GameLogic inicia junto)
 -- ─────────────────────────────────────────────────────────────
 
 local playerData = nil
@@ -113,17 +141,23 @@ OpenLootboxEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
 		return
 	end
 
-	-- Sorteia item
-	local item = Catalog.getRandomFromCategories(box.categories)
+	-- Sorteia item — até 5 tentativas caso categorias venham vazias
+	local item
+	for attempt = 1, 5 do
+		item = Catalog.getRandomFromCategories(box.categories)
+		if item then break end
+		task.wait(0)
+	end
+
 	if not item then
-		warn("[LootboxService] Catálogo vazio para caixa", boxId)
+		warn("[LootboxService] Catálogo vazio para caixa", boxId, "— verifique Catalog.luau")
 		return
 	end
 
 	-- Deduz moedas
 	dados.coins -= box.cost
 
-	-- Envia resultado ao cliente antes de tentar equipar (equip pode demorar)
+	-- Envia resultado ao cliente antes de equipar (equip pode demorar)
 	LootboxResultEvent:FireClient(player, {
 		boxId    = boxId,
 		boxName  = box.name,
@@ -138,7 +172,7 @@ OpenLootboxEvent.OnServerEvent:Connect(function(player: Player, boxId: string)
 
 	-- Equipa no personagem
 	task.spawn(function()
-		equipAssetOnPlayer(player, item.id, item.category)
+		equipAssetOnPlayer(player, item.id)
 	end)
 end)
 

@@ -12,9 +12,9 @@ const path  = require('path');
 // Configuração
 // ─────────────────────────────────────────────────────────────
 
-const ITEMS_PER_SUBCATEGORY = 120;
-const MAX_PRICE             = 100;   // null para desabilitar filtro de preço
-const SORT_TYPE             = 5;     // 5 = Bestselling
+const ITEMS_PER_SUBCATEGORY = 200;
+const MAX_PRICE             = null;  // null = sem filtro de preço
+const SORT_TYPE             = 3;     // 3 = MostFavorited
 
 const CATEGORIES = [
   { name: 'Hair',        category: 11, subcategory: 19 },
@@ -215,6 +215,12 @@ async function main() {
   const total = Object.values(catalog).reduce((s, arr) => s + arr.length, 0);
   console.log(`\n🎉 Catalog.luau gerado em: ${outputPath}`);
   console.log(`📊 Total: ${total} itens em ${Object.keys(catalog).length} categorias`);
+
+  console.log('\n📊 Resumo:');
+  for (const [name, items] of Object.entries(catalog)) {
+    const warn = items.length < 30 ? '  ⚠️  POUCOS ITENS' : '';
+    console.log(`  ${name.padEnd(15)} ${items.length} itens${warn}`);
+  }
 
   const vazias = Object.entries(catalog).filter(([, v]) => v.length === 0).map(([k]) => k);
   if (vazias.length > 0) {
