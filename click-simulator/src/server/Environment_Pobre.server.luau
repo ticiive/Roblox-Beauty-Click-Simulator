@@ -11,7 +11,7 @@ local Lighting  = game:GetService("Lighting")
 -- ─────────────────────────────────────────────────────────────
 
 local W  = 45   -- metade da largura  (70 total)
-local D  = 36   -- metade da profundidade (52 total)
+local D  = 50   -- metade da profundidade (52 total)
 local H  = 22   -- altura
 local DW = 6    -- metade da largura da porta (porta = 12)
 local DH = 13   -- altura da porta
@@ -69,10 +69,10 @@ local taboas = {
 	Color3.fromRGB(56, 38, 17), Color3.fromRGB(66, 47, 23), Color3.fromRGB(54, 37, 16),
 }
 local largTab = 3.5
-local qtdTab  = math.floor(W * 2 / largTab)
+local qtdTab  = math.ceil(W * 2 / largTab)
 for i = 0, qtdTab - 1 do
-	pt({ Size=Vector3.new(largTab - 0.08, 1, D*2),
-		Position=Vector3.new(-W + i * largTab + largTab/2.1, 0.3, 0),
+	pt({ Size=Vector3.new(largTab, 1, D*2),
+		Position=Vector3.new(-W + i * largTab + largTab/2, 0.3, 0),
 		Color=taboas[(i % #taboas) + 1], Material=Enum.Material.WoodPlanks })
 end
 
@@ -215,20 +215,14 @@ local PX = W - 1.5   -- encostado na parede direita
 for andar = 0, 3 do
 	local pY = 3.5 + andar * 4.8
 	-- Tábua da prateleira
-	pt({ Size=Vector3.new(0.32, 0.32, 22), Position=Vector3.new(PX, pY, -11),
+	pt({ Size=Vector3.new(4, 0.32, 3), Position=Vector3.new(PX, pY, -11),
 		Color=C_MADEIRA, Material=Enum.Material.Wood })
 	-- Suportes verticais
 	for sz = -9, 9, 9 do
 		pt({ Size=Vector3.new(0.28, pY, 0.28), Position=Vector3.new(PX, pY/2, -11 + sz),
 			Color=Color3.fromRGB(78, 52, 23), Material=Enum.Material.Wood })
 	end
-	-- Itens desbotados
-	for item = 0, 4 do
-		local cor = DESBOTADOS[((andar * 5 + item) % #DESBOTADOS) + 1]
-		pt({ Size=Vector3.new(1.9, 2.6, 1.3),
-			Position=Vector3.new(PX - 0.8, pY + 1.5, -20 + item * 5),
-			Color=cor, Material=Enum.Material.SmoothPlastic, CanCollide=false })
-	end
+
 
 	-- Teias nos cantos fundo-direito
 	pt({ Size=Vector3.new(4, 0.07, 0.07), Position=Vector3.new(W - 0.6, pY + 0.2, -D + 1.2),
