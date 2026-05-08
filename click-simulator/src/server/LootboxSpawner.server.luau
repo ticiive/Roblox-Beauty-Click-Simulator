@@ -16,15 +16,12 @@ lootboxFolder.Parent = Workspace
 -- Helpers
 -- ─────────────────────────────────────────────────────────────
 
-local function colorizeModel(root, color)
+-- Força visibilidade sem alterar Color nem Material do asset original
+local function forcarVisibilidade(root)
 	local targets = root:IsA("BasePart") and { root } or root:GetDescendants()
 	for _, p in targets do
-		if p:IsA("BasePart") then
+		if p:IsA("BasePart") or p:IsA("MeshPart") then
 			p.Transparency = 0
-			local _, s, _ = p.Color:ToHSV()
-			if s < 0.15 then
-				p.Color = color
-			end
 		end
 	end
 end
@@ -40,23 +37,39 @@ local function anchorModel(root)
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Caixa fallback
+-- Caixa fallback programática (Body + Lid animável)
 -- ─────────────────────────────────────────────────────────────
 
 local function criarFallback(box)
 	local model = Instance.new("Model")
 	model.Name = box.id
 
-	local part = Instance.new("Part")
-	part.Name       = "Body"
-	part.Size       = Vector3.new(5, 5, 5) * box.scale
-	part.Color      = box.color
-	part.Material   = Enum.Material.Neon
-	part.Anchored   = true
-	part.CanCollide = true
-	part.Parent     = model
+	local bodyH = 4 * box.scale
+	local lidH  = 0.5 * box.scale
 
-	model.PrimaryPart = part
+	local body = Instance.new("Part")
+	body.Name       = "Body"
+	body.Size       = Vector3.new(4, bodyH, 4) * box.scale / box.scale  -- normalizado
+	body.Size       = Vector3.new(4 * box.scale, bodyH, 4 * box.scale)
+	body.Color      = box.color
+	body.Material   = Enum.Material.SmoothPlastic
+	body.Anchored   = true
+	body.CanCollide = true
+	body.CFrame     = CFrame.new(0, 0, 0)
+	body.Parent     = model
+
+	local lid = Instance.new("Part")
+	lid.Name       = "Lid"
+	lid.Size       = Vector3.new(4.2 * box.scale, lidH, 4.2 * box.scale)
+	lid.Color      = box.color
+	lid.Material   = Enum.Material.SmoothPlastic
+	lid.Anchored   = true
+	lid.CanCollide = false
+	lid.CFrame     = CFrame.new(0, bodyH / 2 + lidH / 2, 0)
+	lid.Parent     = model
+
+	model.PrimaryPart = body
+	model:SetAttribute("LidPart", "Lid")
 	return model
 end
 
@@ -93,12 +106,12 @@ local function findLeftWall()
 		end
 	end
 
-	warn("[LootboxSpawner] Parede não encontrada após 5 tentativas — usando SpawnOrigin padrão")
+	warn("[LootboxSpawner] Parede não encontrada — usando SpawnOrigin padrão")
 	return nil
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Carrega mesh template uma vez
+-- Carrega mesh template uma vez, com log detalhado
 -- ─────────────────────────────────────────────────────────────
 
 local meshTemplate = nil
@@ -108,12 +121,13 @@ local ok, loaded = pcall(function()
 end)
 
 if ok and loaded then
-	local child = loaded:GetChildren()[1]
+	-- Preferência ao Model encapsulado; fallback ao primeiro filho
+	local child = loaded:FindFirstChildOfClass("Model") or loaded:GetChildren()[1]
 	if child then
 		print("[LootboxSpawner] Mesh carregado:", child.Name, "|", child.ClassName)
-		print("[LootboxSpawner] Descendentes do mesh:")
+		print("[LootboxSpawner] Descendentes:")
 		for _, desc in child:GetDescendants() do
-			if desc:IsA("BasePart") then
+			if desc:IsA("BasePart") or desc:IsA("MeshPart") then
 				local sm = desc:FindFirstChildOfClass("SpecialMesh")
 				local meshId = sm and (" MeshId=" .. sm.MeshId) or ""
 				print(string.format("  [%s] %s | Size=%s | Transp=%.2f%s",
@@ -121,7 +135,7 @@ if ok and loaded then
 			end
 		end
 		child.Parent = nil
-		meshTemplate = child
+		meshTemplate  = child
 	else
 		warn("[LootboxSpawner] Asset vazio — usando fallback")
 	end
@@ -131,13 +145,11 @@ else
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Calcula posições ao longo da parede esquerda
+-- Posições ao longo da parede esquerda
 -- ─────────────────────────────────────────────────────────────
 
 local wall = findLeftWall()
 local N    = #LootboxConfig.Boxes
-
--- Direção que as caixas devem olhar (para dentro do mapa, afastando da parede esq.)
 local lookDir = Vector3.new(1, 0, 0)
 
 -- ─────────────────────────────────────────────────────────────
@@ -148,9 +160,9 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 	local pos
 
 	if wall then
-		local innerX = wall.Position.X + wall.Size.X / 2 + 8
+		local innerX  = wall.Position.X + wall.Size.X / 2 + 8
 		local groundY = wall.Position.Y - wall.Size.Y / 2
-		local zPos = wall.Position.Z + (i - (N + 1) / 2) * 12
+		local zPos    = wall.Position.Z + (i - (N + 1) / 2) * 12
 		pos = Vector3.new(innerX, groundY + 5, zPos)
 	else
 		pos = LootboxConfig.SpawnOrigin + box.spawnOffset
@@ -162,6 +174,7 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 		local clone = meshTemplate:Clone()
 		clone.Name = box.id
 
+		-- Tenta ScaleTo; fallback manual se não houver PrimaryPart
 		local scaleOk = pcall(function()
 			if clone:IsA("Model") then
 				clone:ScaleTo(box.scale)
@@ -169,26 +182,55 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 				clone.Size = clone.Size * box.scale
 			end
 		end)
+
 		if not scaleOk then
-			warn("[LootboxSpawner] ScaleTo falhou para", box.id)
-		end
-
-		colorizeModel(clone, box.color)
-		anchorModel(clone)
-
-		if clone:IsA("BasePart") then
-			local wrapper = Instance.new("Model")
-			wrapper.Name = box.id
-			clone.Parent = wrapper
-			wrapper.PrimaryPart = clone
-			model = wrapper
-		else
-			model = clone
-			if not model.PrimaryPart then
-				model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart", true)
+			warn("[LootboxSpawner] ScaleTo falhou para", box.id, "— escala manual")
+			local pivot = clone:GetPivot()
+			for _, p in clone:GetDescendants() do
+				if p:IsA("BasePart") then
+					p.Size = p.Size * box.scale
+					local offset = (p.CFrame.Position - pivot.Position) * box.scale
+					p.CFrame = CFrame.new(pivot.Position + offset)
+						* (p.CFrame - p.CFrame.Position)
+				end
 			end
 		end
-	else
+
+		-- Força visibilidade sem alterar Color/Material do asset
+		forcarVisibilidade(clone)
+		anchorModel(clone)
+
+		-- Verifica se o clone tem alguma BasePart visível
+		local temParte = false
+		for _, p in clone:GetDescendants() do
+			if p:IsA("BasePart") and p.Transparency < 1 then
+				temParte = true; break
+			end
+		end
+
+		if not temParte then
+			warn("[LootboxSpawner] Clone sem partes visíveis para", box.id, "— usando fallback")
+			clone:Destroy()
+			clone = nil
+		end
+
+		if clone then
+			if clone:IsA("BasePart") then
+				local wrapper = Instance.new("Model")
+				wrapper.Name = box.id
+				clone.Parent = wrapper
+				wrapper.PrimaryPart = clone
+				model = wrapper
+			else
+				model = clone
+				if not model.PrimaryPart then
+					model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart", true)
+				end
+			end
+		end
+	end
+
+	if not model then
 		model = criarFallback(box)
 	end
 
@@ -225,7 +267,7 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 		particles.Parent         = centerPart
 	end
 
-	-- Placa de ativação à frente da caixa (na direção lookDir)
+	-- Placa de ativação à frente da caixa
 	local padPos = pos
 		+ lookDir        * LootboxConfig.PadOffset.Z
 		+ Vector3.new(0, LootboxConfig.PadOffset.Y, 0)
@@ -242,7 +284,7 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 	pad.CastShadow   = false
 	pad.Parent       = model
 
-	-- Billboard flutuante acima da placa
+	-- Billboard flutuante
 	local bb = Instance.new("BillboardGui")
 	bb.Size        = UDim2.fromOffset(210, 58)
 	bb.StudsOffset = Vector3.new(0, 3.5, 0)
@@ -281,7 +323,6 @@ for i, box in ipairs(LootboxConfig.Boxes) do
 	priceLbl.TextXAlignment    = Enum.TextXAlignment.Center
 	priceLbl.Parent            = bg
 
-	-- ProximityPrompt
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText            = "Comprar"
 	prompt.ObjectText            = box.name .. "  💰 " .. tostring(box.cost)

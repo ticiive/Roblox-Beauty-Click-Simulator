@@ -13,8 +13,8 @@ const path  = require('path');
 // ─────────────────────────────────────────────────────────────
 
 const ITEMS_PER_SUBCATEGORY = 200;
-const MAX_PRICE             = null;  // null = sem filtro de preço
-const SORT_TYPE             = 3;     // 3 = MostFavorited
+const MAX_PRICE             = null;   // null = sem filtro
+const SORT_TYPE             = 3;      // 3 = MostFavorited
 
 const CATEGORIES = [
   { name: 'Hair',        category: 11, subcategory: 19 },
@@ -27,6 +27,9 @@ const CATEGORIES = [
   { name: 'Pants',       category: 3,  subcategory: 57 },
   { name: 'TShirts',     category: 3,  subcategory: 55 },
 ];
+
+// Categorias que precisam de lookup de template ID
+const CLOTHING_CATS = new Set(['Shirts', 'Pants', 'TShirts']);
 
 // ─────────────────────────────────────────────────────────────
 // Utilitários
@@ -46,55 +49,46 @@ function sanitizeName(name) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// HTTP fetch com retry
+// HTTP genérico com timeout
 // ─────────────────────────────────────────────────────────────
 
-function fetchPage(category, subcategory, cursor) {
+function httpGet(url) {
   return new Promise((resolve, reject) => {
-    let url = `https://catalog.roblox.com/v1/search/items/details`
-            + `?Category=${category}`
-            + `&Subcategory=${subcategory}`
-            + `&SortType=${SORT_TYPE}`
-            + `&Limit=30`;
-    if (MAX_PRICE !== null) url += `&MaxPrice=${MAX_PRICE}`;
-    if (cursor)             url += `&Cursor=${encodeURIComponent(cursor)}`;
-
     const req = https.get(url, {
-      headers: {
-        'User-Agent': 'Roblox/WinInet',
-        'Accept':     'application/json',
-      },
+      headers: { 'User-Agent': 'Roblox/WinInet', 'Accept': 'application/json' },
     }, (res) => {
-      if (res.statusCode === 429) {
-        reject(new Error('rate_limited'));
-        return;
-      }
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-
+      if (res.statusCode === 429) { reject(new Error('rate_limited')); return; }
+      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
       let raw = '';
-      res.on('data', chunk => raw += chunk);
+      res.on('data', c => raw += c);
       res.on('end', () => {
-        try {
-          resolve(JSON.parse(raw));
-        } catch (e) {
-          reject(new Error(`JSON parse: ${e.message} | body: ${raw.slice(0, 120)}`));
-        }
+        try { resolve(JSON.parse(raw)); }
+        catch (e) { reject(new Error(`JSON: ${e.message} | ${raw.slice(0, 80)}`)); }
       });
     });
-
     req.on('error', reject);
     req.setTimeout(12000, () => { req.destroy(); reject(new Error('timeout')); });
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Busca de página do catálogo com retry
+// ─────────────────────────────────────────────────────────────
+
+function buildCatalogUrl(category, subcategory, cursor) {
+  let url = `https://catalog.roblox.com/v1/search/items/details`
+          + `?Category=${category}&Subcategory=${subcategory}`
+          + `&SortType=${SORT_TYPE}&Limit=30`;
+  if (MAX_PRICE !== null) url += `&MaxPrice=${MAX_PRICE}`;
+  if (cursor)             url += `&Cursor=${encodeURIComponent(cursor)}`;
+  return url;
 }
 
 async function fetchPageWithRetry(category, subcategory, cursor) {
   const delays = [500, 1500, 3000];
   for (let i = 0; i <= delays.length; i++) {
     try {
-      return await fetchPage(category, subcategory, cursor);
+      return await httpGet(buildCatalogUrl(category, subcategory, cursor));
     } catch (err) {
       if (i === delays.length) throw err;
       const wait = err.message === 'rate_limited' ? 5000 : delays[i];
@@ -105,27 +99,59 @@ async function fetchPageWithRetry(category, subcategory, cursor) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Lookup de template ID (Shirts/Pants/TShirts)
+// economy.roblox.com retorna AssetId = ID real do template
+// ─────────────────────────────────────────────────────────────
+
+async function resolveTemplateId(assetId) {
+  const url = `https://economy.roblox.com/v2/assets/${assetId}/details`;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const data = await httpGet(url);
+      const templateId = data.AssetId || assetId;
+      return { id: templateId, fallback: false };
+    } catch (err) {
+      if (attempt < 2) await sleep(1000);
+    }
+  }
+  return { id: assetId, fallback: true };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Coleta de uma categoria
 // ─────────────────────────────────────────────────────────────
 
 async function fetchCategory(catName, category, subcategory) {
-  console.log(`\n📦 Buscando ${catName}…`);
+  const isClothing = CLOTHING_CATS.has(catName);
+  const pauseMs   = isClothing ? 400 : 250;
+
+  console.log(`\n📦 Buscando ${catName}${isClothing ? ' (lookup de template)' : ''}…`);
   const items  = [];
   let   cursor = null;
 
   while (items.length < ITEMS_PER_SUBCATEGORY) {
     const data = await fetchPageWithRetry(category, subcategory, cursor);
-
     if (!data.data || data.data.length === 0) break;
 
     for (const item of data.data) {
-      if (item.itemType !== 'Asset')        continue;
+      if (item.itemType !== 'Asset') continue;
       if (items.length >= ITEMS_PER_SUBCATEGORY) break;
 
+      let itemId         = item.id;
+      let templateFallback = false;
+
+      if (isClothing) {
+        const result = await resolveTemplateId(item.id);
+        itemId           = result.id;
+        templateFallback = result.fallback;
+        await sleep(pauseMs);
+      }
+
       items.push({
-        id:    item.id,
+        id:    itemId,
         name:  sanitizeName(item.name),
         price: item.price || 0,
+        templateFallback,
       });
     }
 
@@ -134,10 +160,15 @@ async function fetchCategory(catName, category, subcategory) {
     cursor = data.nextPageCursor;
     if (!cursor || items.length >= ITEMS_PER_SUBCATEGORY) break;
 
-    await sleep(250);
+    await sleep(isClothing ? pauseMs : 250);
   }
 
-  console.log(`  ✅ ${items.length} itens coletados para ${catName}          `);
+  const fallbacks = items.filter(i => i.templateFallback).length;
+  console.log(
+    `  ✅ ${items.length} itens coletados para ${catName}` +
+    (fallbacks > 0 ? `  ⚠️  ${fallbacks} sem template confirmado` : '') +
+    '          '
+  );
   return items;
 }
 
@@ -212,19 +243,24 @@ async function main() {
   const outputPath = path.join(__dirname, 'src', 'shared', 'Catalog.luau');
   fs.writeFileSync(outputPath, generateLuau(catalog), 'utf8');
 
-  const total = Object.values(catalog).reduce((s, arr) => s + arr.length, 0);
-  console.log(`\n🎉 Catalog.luau gerado em: ${outputPath}`);
+  const total = Object.values(catalog).reduce((s, a) => s + a.length, 0);
+  console.log(`\n🎉 Catalog.luau gerado: ${outputPath}`);
   console.log(`📊 Total: ${total} itens em ${Object.keys(catalog).length} categorias`);
 
   console.log('\n📊 Resumo:');
   for (const [name, items] of Object.entries(catalog)) {
-    const warn = items.length < 30 ? '  ⚠️  POUCOS ITENS' : '';
-    console.log(`  ${name.padEnd(15)} ${items.length} itens${warn}`);
+    const fallbacks = items.filter(i => i.templateFallback).length;
+    const warn = items.length < 30
+      ? '  ⚠️  POUCOS ITENS'
+      : fallbacks > 0
+        ? `  ⚠️  ${fallbacks} sem template`
+        : '';
+    console.log(`  ${name.padEnd(15)} ${String(items.length).padStart(3)} itens${warn}`);
   }
 
   const vazias = Object.entries(catalog).filter(([, v]) => v.length === 0).map(([k]) => k);
   if (vazias.length > 0) {
-    console.warn(`⚠️  Categorias sem itens (verifique IDs): ${vazias.join(', ')}`);
+    console.warn(`⚠️  Categorias vazias: ${vazias.join(', ')}`);
   }
 }
 

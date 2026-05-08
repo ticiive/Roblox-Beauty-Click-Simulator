@@ -51,7 +51,7 @@ task.spawn(function()
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- Equipa asset no personagem (com AssetId attribute + multi-hat)
+-- Equipa asset — acessórios acumulam, Shirt/Pants/TShirt slot único
 -- ─────────────────────────────────────────────────────────────
 
 local function equipAsset(player: Player, assetId: number)
@@ -90,16 +90,9 @@ local function equipAsset(player: Player, assetId: number)
 		tshirt.Parent = character
 	end
 
+	-- Accessories acumulam sem remoção de existentes
 	for _, child in ipairs(model:GetChildren()) do
 		if child:IsA("Accessory") then
-			local accType = child.AccessoryType
-			if accType ~= Enum.AccessoryType.Unknown and accType ~= Enum.AccessoryType.Hat then
-				for _, ex in ipairs(character:GetChildren()) do
-					if ex:IsA("Accessory") and ex.AccessoryType == accType then
-						ex:Destroy()
-					end
-				end
-			end
 			child:SetAttribute("AssetId", assetId)
 			humanoid:AddAccessory(child)
 		end
@@ -109,7 +102,30 @@ local function equipAsset(player: Player, assetId: number)
 end
 
 -- ─────────────────────────────────────────────────────────────
--- EquipItemEvent: cliente quer equipar item do inventário
+-- Reaplicar cor salva após equip
+-- ─────────────────────────────────────────────────────────────
+
+local function reaplicarCor(player: Player, itemId: number)
+	local dados = playerData and playerData[player.UserId]
+	if not dados or not dados.itemColors then return end
+	local cd = dados.itemColors[tostring(itemId)]
+	if not cd then return end
+
+	local color = Color3.new(cd.r, cd.g, cd.b)
+	local character = player.Character
+	if not character then return end
+
+	for _, child in ipairs(character:GetChildren()) do
+		if child:IsA("Accessory") and child:GetAttribute("AssetId") == itemId then
+			for _, part in child:GetDescendants() do
+				if part:IsA("BasePart") then part.Color = color end
+			end
+		end
+	end
+end
+
+-- ─────────────────────────────────────────────────────────────
+-- EquipItemEvent
 -- ─────────────────────────────────────────────────────────────
 
 EquipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
@@ -127,6 +143,7 @@ EquipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 	end
 
 	equipAsset(player, itemId)
+	reaplicarCor(player, itemId)
 
 	if _G.Inventory then
 		_G.Inventory.addToEquipped(player, itemId, item.category)
@@ -135,7 +152,7 @@ EquipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- UnequipItemEvent: cliente quer desequipar item
+-- UnequipItemEvent
 -- ─────────────────────────────────────────────────────────────
 
 UnequipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
@@ -147,7 +164,7 @@ UnequipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 
 	local character = player.Character
 	if character then
-		-- Remove acessório pelo AssetId attribute
+		-- Remove UMA instância do accessory por chamada
 		for _, child in ipairs(character:GetChildren()) do
 			if child:IsA("Accessory") and child:GetAttribute("AssetId") == itemId then
 				child:Destroy()
@@ -155,17 +172,17 @@ UnequipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 			end
 		end
 
-		-- Remove Shirt/Pants/ShirtGraphic pela categoria
+		-- Shirt/Pants/ShirtGraphic pela categoria
 		local item = dados.inventory[tostring(itemId)]
 		if item then
 			local cat = item.category
-			if cat == "Shirt" then
+			if cat == "Shirts" then
 				local ex = character:FindFirstChildOfClass("Shirt")
 				if ex then ex:Destroy() end
 			elseif cat == "Pants" then
 				local ex = character:FindFirstChildOfClass("Pants")
 				if ex then ex:Destroy() end
-			elseif cat == "TShirt" then
+			elseif cat == "TShirts" then
 				local ex = character:FindFirstChildOfClass("ShirtGraphic")
 				if ex then ex:Destroy() end
 			end
@@ -179,30 +196,35 @@ UnequipItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number)
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- RecolorItemEvent: muda cor de acessório equipado
+-- RecolorItemEvent — sem break, persiste cor no playerData
 -- ─────────────────────────────────────────────────────────────
 
 RecolorItemEvent.OnServerEvent:Connect(function(player: Player, itemId: number, color: Color3)
 	if type(itemId) ~= "number" then return end
-	if typeof(color) ~= "Color3" then return end
+	if typeof(color) ~= "Color3"  then return end
 
+	local dados = playerData and playerData[player.UserId]
+	if not dados then return end
+
+	-- Recolore TODOS os accessories com esse AssetId (sem break)
 	local character = player.Character
-	if not character then return end
-
-	for _, child in ipairs(character:GetChildren()) do
-		if child:IsA("Accessory") and child:GetAttribute("AssetId") == itemId then
-			for _, part in child:GetDescendants() do
-				if part:IsA("BasePart") then
-					part.Color = color
+	if character then
+		for _, child in ipairs(character:GetChildren()) do
+			if child:IsA("Accessory") and child:GetAttribute("AssetId") == itemId then
+				for _, part in child:GetDescendants() do
+					if part:IsA("BasePart") then part.Color = color end
 				end
 			end
-			break
 		end
 	end
+
+	-- Persiste: Color3 não serializa no DataStore → salva como {r,g,b}
+	if not dados.itemColors then dados.itemColors = {} end
+	dados.itemColors[tostring(itemId)] = { r = color.R, g = color.G, b = color.B }
 end)
 
 -- ─────────────────────────────────────────────────────────────
--- Re-equipa tudo ao respawnar
+-- Re-equipa tudo ao respawnar, reaplicando cores salvas
 -- ─────────────────────────────────────────────────────────────
 
 local function reequipAll(player: Player)
@@ -220,6 +242,7 @@ local function reequipAll(player: Player)
 	for _, id in ipairs(allIds) do
 		task.wait(0.3)
 		equipAsset(player, id)
+		reaplicarCor(player, id)
 	end
 end
 

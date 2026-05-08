@@ -87,16 +87,9 @@ local function equipAssetOnPlayer(player: Player, assetId: number)
 		equipped = true
 	end
 
+	-- Accessories acumulam sem remover existentes (slot único só pra Shirt/Pants/TShirt)
 	for _, child in ipairs(model:GetChildren()) do
 		if child:IsA("Accessory") then
-			local accType = child.AccessoryType
-			if accType ~= Enum.AccessoryType.Unknown and accType ~= Enum.AccessoryType.Hat then
-				for _, ex in ipairs(character:GetChildren()) do
-					if ex:IsA("Accessory") and ex.AccessoryType == accType then
-						ex:Destroy()
-					end
-				end
-			end
 			child:SetAttribute("AssetId", assetId)
 			humanoid:AddAccessory(child)
 			equipped = true

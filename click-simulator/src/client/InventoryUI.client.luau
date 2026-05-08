@@ -385,40 +385,46 @@ local function populateEquipados()
 
 			local card = criarCard(scrollEquipados, itemId, name, category, true)
 
+			-- Shirt/Pants/TShirts: textura 2D, sem botão de cor
+			local isClothing = (category == "Shirts" or category == "Pants" or category == "TShirts")
+			local capId = itemId
+
 			local unequipBtn = Instance.new("TextButton")
 			unequipBtn.Text             = "✕ Tirar"
 			unequipBtn.TextSize         = 10
 			unequipBtn.Font             = Enum.Font.GothamBold
 			unequipBtn.TextColor3       = Color3.new(1, 1, 1)
-			unequipBtn.Size             = UDim2.new(0.5, -4, 0, 22)
+			unequipBtn.Size             = isClothing
+				and UDim2.new(1, -6, 0, 22)
+				or  UDim2.new(0.5, -4, 0, 22)
 			unequipBtn.Position         = UDim2.new(0, 2, 1, -24)
 			unequipBtn.BackgroundColor3 = C_VERM
 			unequipBtn.BorderSizePixel  = 0
 			unequipBtn.ZIndex           = 14
 			unequipBtn.Parent           = card
 			addCorner(unequipBtn, 6)
-
-			local recolorBtn = Instance.new("TextButton")
-			recolorBtn.Text             = "🎨"
-			recolorBtn.TextSize         = 14
-			recolorBtn.Font             = Enum.Font.GothamBold
-			recolorBtn.TextColor3       = Color3.new(1, 1, 1)
-			recolorBtn.Size             = UDim2.new(0.5, -4, 0, 22)
-			recolorBtn.Position         = UDim2.new(0.5, 2, 1, -24)
-			recolorBtn.BackgroundColor3 = C_CINZA
-			recolorBtn.BorderSizePixel  = 0
-			recolorBtn.ZIndex           = 14
-			recolorBtn.Parent           = card
-			addCorner(recolorBtn, 6)
-
-			local capId = itemId
 			unequipBtn.Activated:Connect(function()
 				UnequipItemEvent:FireServer(capId)
 			end)
-			recolorBtn.Activated:Connect(function()
-				recolorTargetId = capId
-				colorPicker.Visible = true
-			end)
+
+			if not isClothing then
+				local recolorBtn = Instance.new("TextButton")
+				recolorBtn.Text             = "🎨"
+				recolorBtn.TextSize         = 14
+				recolorBtn.Font             = Enum.Font.GothamBold
+				recolorBtn.TextColor3       = Color3.new(1, 1, 1)
+				recolorBtn.Size             = UDim2.new(0.5, -4, 0, 22)
+				recolorBtn.Position         = UDim2.new(0.5, 2, 1, -24)
+				recolorBtn.BackgroundColor3 = C_CINZA
+				recolorBtn.BorderSizePixel  = 0
+				recolorBtn.ZIndex           = 14
+				recolorBtn.Parent           = card
+				addCorner(recolorBtn, 6)
+				recolorBtn.Activated:Connect(function()
+					recolorTargetId = capId
+					colorPicker.Visible = true
+				end)
+			end
 		end
 	end
 

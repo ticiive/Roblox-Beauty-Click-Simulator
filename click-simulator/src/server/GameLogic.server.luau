@@ -69,16 +69,17 @@ _G.Inventory.addToEquipped = function(player, itemId, category)
 	if not dados then return end
 	if not dados.equipped then dados.equipped = {} end
 
-	if category == "Hats" then
-		-- Chapéus acumulam
-		if not dados.equipped.Hats then dados.equipped.Hats = {} end
-		for _, id in dados.equipped.Hats do
-			if id == itemId then return end
-		end
-		table.insert(dados.equipped.Hats, itemId)
-	else
-		-- Slot único: substitui
+	-- Shirt/Pants/TShirt: slot único (Roblox não suporta 2 peças do mesmo tipo)
+	local slotUnico = (category == "Shirts" or category == "Pants" or category == "TShirts")
+	if slotUnico then
 		dados.equipped[category] = { itemId }
+	else
+		-- Todos os acessórios acumulam livremente
+		if not dados.equipped[category] then dados.equipped[category] = {} end
+		for _, id in dados.equipped[category] do
+			if id == itemId then return end  -- já equipado
+		end
+		table.insert(dados.equipped[category], itemId)
 	end
 end
 
@@ -117,7 +118,8 @@ local function dadosPadrao()
 		ownedClothing = { skin_1 = true, shirt_1 = true, pants_1 = true },
 		outfit        = outfitPadrao(),
 		inventory     = {},   -- itens ganhos via lootbox
-		equipped      = {},   -- { Hair={id}, Hats={id1,id2}, Shirt={id} }
+		equipped      = {},   -- { Cat={id1,id2,...} } acumula tudo exceto Shirts/Pants/TShirts
+		itemColors    = {},   -- { [tostring(id)] = {r,g,b} } cores customizadas
 	}
 end
 
@@ -182,6 +184,11 @@ local function carregarDados(player: Player)
 		if not dados.outfit        then dados.outfit        = outfitPadrao()               end
 		if not dados.inventory     then dados.inventory     = {}                           end
 		if not dados.equipped      then dados.equipped      = {}                           end
+		if not dados.itemColors    then dados.itemColors    = {}                           end
+		-- Migração: equipped de valor solto (número) → lista
+		for cat, val in dados.equipped do
+			if type(val) ~= "table" then dados.equipped[cat] = { val } end
+		end
 		playerData[player.UserId] = dados
 		print("[GameLogic] Dados carregados para", player.Name)
 	else
