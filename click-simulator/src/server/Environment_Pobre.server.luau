@@ -10,8 +10,8 @@ local Lighting  = game:GetService("Lighting")
 -- Dimensões do cômodo
 -- ─────────────────────────────────────────────────────────────
 
-local W  = 35   -- metade da largura  (70 total)
-local D  = 26   -- metade da profundidade (52 total)
+local W  = 45   -- metade da largura  (70 total)
+local D  = 36   -- metade da profundidade (52 total)
 local H  = 22   -- altura
 local DW = 6    -- metade da largura da porta (porta = 12)
 local DH = 13   -- altura da porta
@@ -72,7 +72,7 @@ local largTab = 3.5
 local qtdTab  = math.floor(W * 2 / largTab)
 for i = 0, qtdTab - 1 do
 	pt({ Size=Vector3.new(largTab - 0.08, 1, D*2),
-		Position=Vector3.new(-W + i * largTab + largTab/2, -0.5, 0),
+		Position=Vector3.new(-W + i * largTab + largTab/2.1, 0.3, 0),
 		Color=taboas[(i % #taboas) + 1], Material=Enum.Material.WoodPlanks })
 end
 
@@ -122,35 +122,6 @@ pt({ Name="Teto", Size=Vector3.new(W*2, 1, D*2), Position=Vector3.new(0, H, 0),
 for bz = -D + 5, D - 5, 9 do
 	pt({ Size=Vector3.new(W*2, 1.6, 2), Position=Vector3.new(0, H - 0.8, bz),
 		Color=Color3.fromRGB(50, 34, 15), Material=Enum.Material.Wood })
-end
-
--- ─────────────────────────────────────────────────────────────
--- ESCADARIA RÚSTICA (lado esquerdo, área da frente)
--- ─────────────────────────────────────────────────────────────
-
-for step = 0, 4 do
-	pt({
-		Name     = "Degrau" .. (step + 1),
-		Size     = Vector3.new(10, (step + 1) * 2, 2.5),
-		Position = Vector3.new(-W + 6, (step + 1), D - 5 - step * 2.5),
-		Color    = Color3.fromRGB(85, 58, 27),
-		Material = Enum.Material.Wood,
-	})
-end
-
--- Plataforma no topo
-pt({ Name="Plataforma", Size=Vector3.new(10, 0.9, 8),
-	Position = Vector3.new(-W + 6, 10.45, D - 5 - 5 * 2.5 + 1.5),
-	Color=Color3.fromRGB(78, 52, 23), Material=Enum.Material.Wood })
-
--- Corrimão (barra + balaústres toscos)
-local corrBaseZ = D - 5 - 4 * 2.5
-pt({ Size=Vector3.new(0.38, 0.38, 13.5), Position=Vector3.new(-W + 11.3, 11.2, corrBaseZ + 2.5),
-	Color=Color3.fromRGB(68, 46, 20), Material=Enum.Material.Wood })
-for s = 0, 4 do
-	pt({ Size=Vector3.new(0.3, (s+1)*2 + 1.5, 0.3),
-		Position=Vector3.new(-W + 11.3, ((s+1)*2 + 1.5)/2, D - 5 - s * 2.5),
-		Color=Color3.fromRGB(68, 46, 20), Material=Enum.Material.Wood })
 end
 
 -- ─────────────────────────────────────────────────────────────
