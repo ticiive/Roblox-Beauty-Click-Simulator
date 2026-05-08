@@ -9,7 +9,8 @@
       "Bash(powershell.exe -NoProfile -Command \"git pull origin main\")",
       "Bash(git pull *)",
       "Bash(git fetch *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "PowerShell($cfg = Get-Content \".claude\\\\settings.json\" -Raw | ConvertFrom-Json; \"Pull: $\\($cfg.hooks.UserPromptSubmit[0].hooks[0].command\\)\"; \"Stop: $\\($cfg.hooks.Stop[0].hooks[0].command\\)\")"
     ]
   }
 }

@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git add -A; git diff --staged --quiet; if ($LASTEXITCODE -ne 0) { git commit -m 'auto-sync' }; git push",
+            "command": "git add -A; git diff --staged --quiet; if ($LASTEXITCODE -ne 0) { git commit -m 'auto-sync' }; git push origin HEAD:main",
             "shell": "powershell",
             "timeout": 60,
             "statusMessage": "Fazendo push automático..."
