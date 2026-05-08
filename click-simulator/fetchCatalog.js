@@ -205,11 +205,19 @@ function generateLuau(catalog) {
   }
 
   lines.push(
-    '-- Retorna um item aleatório de uma categoria',
+    '-- Retorna um item aleatório de uma categoria (respeitando blacklist do admin)',
     'function Catalog.getRandom(categoryName: string)',
     '\tlocal list = (Catalog :: any)[categoryName]',
     '\tif not list or #list == 0 then return nil end',
-    '\treturn list[math.random(1, #list)]',
+    '\tlocal blacklist = (_G and _G.CatalogBlacklist) or {}',
+    '\tlocal available = {}',
+    '\tfor _, item in ipairs(list) do',
+    '\t\tif not blacklist[item.id] then',
+    '\t\t\ttable.insert(available, item)',
+    '\t\tend',
+    '\tend',
+    '\tif #available == 0 then return nil end',
+    '\treturn available[math.random(1, #available)]',
     'end',
     '',
     '-- Escolhe categoria aleatória da lista, depois item aleatório dentro dela.',
