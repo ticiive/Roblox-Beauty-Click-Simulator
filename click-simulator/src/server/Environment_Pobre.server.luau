@@ -215,7 +215,7 @@ local PX = W - 1.5   -- encostado na parede direita
 for andar = 0, 3 do
 	local pY = 3.5 + andar * 4.8
 	-- Tábua da prateleira
-	pt({ Size=Vector3.new(4, 0.32, 3), Position=Vector3.new(PX, pY, -11),
+	pt({ Size=Vector3.new(4, 0.32, 35), Position=Vector3.new(PX, pY, -11),
 		Color=C_MADEIRA, Material=Enum.Material.Wood })
 	-- Suportes verticais
 	for sz = -9, 9, 9 do
