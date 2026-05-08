@@ -51,6 +51,18 @@ LootboxConfig.Boxes = {
 		spawnOffset = Vector3.new(30, 0, 0),
 		categories  = { "Hair", "Hats", "FaceAcc", "NeckAcc", "ShoulderAcc", "WaistAcc", "Shirts", "Pants", "TShirts" },
 	},
+	{
+		id              = "rebirth",
+		name            = "Caixa Rebirth",
+		emoji           = "✨",
+		cost            = 500,
+		color           = Color3.fromRGB(100, 220, 255),
+		glowColor       = Color3.fromRGB(100, 220, 255),
+		scale           = 1.3,
+		spawnOffset     = Vector3.new(50, 0, 0),
+		categories      = { "Hair", "Hats", "FaceAcc", "NeckAcc", "ShoulderAcc", "WaistAcc", "Shirts", "Pants", "TShirts" },
+		requiresRebirth = 1,
+	},
 }
 
 LootboxConfig.AssetTypeByCategory = {

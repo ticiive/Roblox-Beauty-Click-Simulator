@@ -4,8 +4,9 @@ local Players           = game:GetService("Players")
 local DataStoreService  = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared     = ReplicatedStorage:WaitForChild("Shared")
-local GameConfig = require(Shared:WaitForChild("GameConfig"))
+local Shared        = ReplicatedStorage:WaitForChild("Shared")
+local GameConfig    = require(Shared:WaitForChild("GameConfig"))
+local RebirthConfig = require(Shared:WaitForChild("RebirthConfig"))
 
 local ClickEvent       = ReplicatedStorage:WaitForChild("ClickEvent")
 local BuyUpgradeEvent  = ReplicatedStorage:WaitForChild("BuyUpgradeEvent")
@@ -112,14 +113,16 @@ end
 
 local function dadosPadrao()
 	return {
-		coins         = GameConfig.StartingCoins,
-		clickPower    = GameConfig.StartingClickPower,
-		totalClicks   = 0,
-		ownedClothing = { skin_1 = true, shirt_1 = true, pants_1 = true },
-		outfit        = outfitPadrao(),
-		inventory     = {},   -- itens ganhos via lootbox
-		equipped      = {},   -- { Cat={id1,id2,...} } acumula tudo exceto Shirts/Pants/TShirts
-		itemColors    = {},   -- { [tostring(id)] = {r,g,b} } cores customizadas
+		coins               = GameConfig.StartingCoins,
+		clickPower          = GameConfig.StartingClickPower,
+		totalClicks         = 0,
+		ownedClothing       = { skin_1 = true, shirt_1 = true, pants_1 = true },
+		outfit              = outfitPadrao(),
+		inventory           = {},   -- itens ganhos via lootbox
+		equipped            = {},   -- { Cat={id1,id2,...} } acumula tudo exceto Shirts/Pants/TShirts
+		itemColors          = {},   -- { [tostring(id)] = {r,g,b} } cores customizadas
+		rebirths            = 0,
+		rebirthMultiplier   = 1.0,
 	}
 end
 
@@ -182,9 +185,11 @@ local function carregarDados(player: Player)
 		-- Migração: garante campos novos em saves antigos
 		if not dados.ownedClothing then dados.ownedClothing = dadosPadrao().ownedClothing end
 		if not dados.outfit        then dados.outfit        = outfitPadrao()               end
-		if not dados.inventory     then dados.inventory     = {}                           end
-		if not dados.equipped      then dados.equipped      = {}                           end
-		if not dados.itemColors    then dados.itemColors    = {}                           end
+		if not dados.inventory          then dados.inventory          = {}  end
+		if not dados.equipped           then dados.equipped           = {}  end
+		if not dados.itemColors         then dados.itemColors         = {}  end
+		if not dados.rebirths           then dados.rebirths           = 0   end
+		if not dados.rebirthMultiplier  then dados.rebirthMultiplier  = 1.0 end
 		-- Migração: equipped de valor solto (número) → lista
 		for cat, val in dados.equipped do
 			if type(val) ~= "table" then dados.equipped[cat] = { val } end
@@ -241,9 +246,69 @@ ClickEvent.OnServerEvent:Connect(function(player: Player)
 		if tracker.count > GameConfig.MaxClicksPerSecond then return end
 	end
 
-	dados.coins       += dados.clickPower
+	local ganho = math.floor(dados.clickPower * (dados.rebirthMultiplier or 1))
+	dados.coins       += math.max(ganho, 1)
 	dados.totalClicks += 1
 	enviarStats(player)
+end)
+
+-- ─────────────────────────────────────────────────────────────
+-- Evento: Rebirth
+-- ─────────────────────────────────────────────────────────────
+
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	or (function()
+		local f = Instance.new("Folder")
+		f.Name   = "Remotes"
+		f.Parent = ReplicatedStorage
+		return f
+	end)()
+
+local function getOrCreateRemote(name: string, className: string)
+	local ex = Remotes:FindFirstChild(name)
+	if ex then return ex end
+	local obj = Instance.new(className)
+	obj.Name   = name
+	obj.Parent = Remotes
+	return obj
+end
+
+local RebirthEvent       = getOrCreateRemote("RebirthEvent",       "RemoteEvent")
+local RebirthResultEvent = getOrCreateRemote("RebirthResultEvent", "RemoteEvent")
+
+RebirthEvent.OnServerEvent:Connect(function(player: Player)
+	local dados = playerData[player.UserId]
+	if not dados then return end
+
+	if dados.coins < RebirthConfig.MinCoins then
+		RebirthResultEvent:FireClient(player, {
+			success = false,
+			reason  = "Precisa de 100.000 moedas",
+		})
+		return
+	end
+
+	dados.rebirths          = (dados.rebirths or 0) + 1
+	dados.rebirthMultiplier = 1 + (dados.rebirths * RebirthConfig.MultiplierStep)
+
+	-- Reseta progresso, preserva rebirths e multiplicador
+	dados.coins       = 0
+	dados.clickPower  = GameConfig.StartingClickPower
+	dados.totalClicks = 0
+	dados.inventory   = {}
+	dados.equipped    = {}
+	dados.itemColors  = {}
+
+	print(string.format("[GameLogic] %s fez rebirth! Total: %d  Multiplicador: %.1fx",
+		player.Name, dados.rebirths, dados.rebirthMultiplier))
+
+	enviarStats(player)
+
+	RebirthResultEvent:FireClient(player, {
+		success    = true,
+		rebirths   = dados.rebirths,
+		multiplier = dados.rebirthMultiplier,
+	})
 end)
 
 -- ─────────────────────────────────────────────────────────────

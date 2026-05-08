@@ -16,7 +16,7 @@ local ClickEvent       = ReplicatedStorage:WaitForChild("ClickEvent")
 local BuyUpgradeEvent  = ReplicatedStorage:WaitForChild("BuyUpgradeEvent")
 local UpdateStatsEvent = ReplicatedStorage:WaitForChild("UpdateStatsEvent")
 
-local statsAtuais = { coins = 0, clickPower = 1, totalClicks = 0 }
+local statsAtuais = { coins = 0, clickPower = 1, totalClicks = 0, rebirths = 0, rebirthMultiplier = 1.0 }
 
 -- ─────────────────────────────────────────────────────────────
 -- Paleta Boutique de Luxo
@@ -87,7 +87,7 @@ screenGui.Parent         = playerGui
 -- ─────────────────────────────────────────────────────────────
 
 local statsFrame = Instance.new("Frame")
-statsFrame.Size                   = UDim2.new(0, 230, 0, 148)
+statsFrame.Size                   = UDim2.new(0, 230, 0, 152)
 statsFrame.Position               = UDim2.new(0, 16, 0, 16)
 statsFrame.BackgroundColor3       = C_FUNDO
 statsFrame.BackgroundTransparency = 0.08
@@ -121,9 +121,13 @@ local function novaLabelStat(posY: number, texto: string): TextLabel
 	return lb
 end
 
-local labelMoedas  = novaLabelStat(40,  "💰  Saldo:     0")
-local labelPoder   = novaLabelStat(74,  "✨  Estilo:    1")
-local labelCliques = novaLabelStat(108, "👗  Criações:  0")
+local labelMoedas   = novaLabelStat(40,  "💰  Saldo:     0")
+local labelPoder    = novaLabelStat(74,  "✨  Estilo:    1")
+local labelCliques  = novaLabelStat(108, "👗  Criações:  0")
+
+local labelRebirth  = novaLabelStat(142, "")
+labelRebirth.TextColor3 = Color3.fromRGB(255, 215, 0)
+labelRebirth.Visible    = false
 
 -- ─────────────────────────────────────────────────────────────
 -- Feedback flutuante ao clicar
@@ -276,11 +280,35 @@ function atualizarBotoesLoja()
 	end
 end
 
-function atualizarStats(dados: { coins: number, clickPower: number, totalClicks: number })
+function atualizarStats(dados)
 	statsAtuais = dados
 	labelMoedas.Text  = "💰  Saldo:     " .. fmt(dados.coins)
-	labelPoder.Text   = "✨  Estilo:    " .. fmt(dados.clickPower)
+
+	local mult = dados.rebirthMultiplier or 1
+	if mult > 1 then
+		labelPoder.Text = "✨  Estilo:    " .. fmt(dados.clickPower)
+			.. " (x" .. string.format("%.1f", mult) .. ")"
+	else
+		labelPoder.Text = "✨  Estilo:    " .. fmt(dados.clickPower)
+	end
+
 	labelCliques.Text = "👗  Criações:  " .. fmt(dados.totalClicks)
+
+	local rebirths = dados.rebirths or 0
+	if rebirths > 0 then
+		local maxDisplay = 10
+		if rebirths > maxDisplay then
+			labelRebirth.Text = "⭐x" .. rebirths
+		else
+			labelRebirth.Text = string.rep("⭐", rebirths)
+		end
+		labelRebirth.Visible = true
+		statsFrame.Size = UDim2.new(0, 230, 0, 182)
+	else
+		labelRebirth.Visible = false
+		statsFrame.Size = UDim2.new(0, 230, 0, 152)
+	end
+
 	atualizarBotoesLoja()
 end
 

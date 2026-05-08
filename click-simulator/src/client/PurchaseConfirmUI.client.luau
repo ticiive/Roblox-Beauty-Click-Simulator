@@ -8,10 +8,16 @@ local playerGui = player:WaitForChild("PlayerGui")
 local Shared        = ReplicatedStorage:WaitForChild("Shared")
 local LootboxConfig = require(Shared:WaitForChild("LootboxConfig"))
 
-local Remotes                    = ReplicatedStorage:WaitForChild("Remotes")
+local UpdateStatsEvent            = ReplicatedStorage:WaitForChild("UpdateStatsEvent")
+local Remotes                     = ReplicatedStorage:WaitForChild("Remotes")
 local RequestPurchaseConfirmEvent = Remotes:WaitForChild("RequestPurchaseConfirmEvent")
 local ConfirmPurchaseEvent        = Remotes:WaitForChild("ConfirmPurchaseEvent")
 local LootboxResultEvent          = Remotes:WaitForChild("LootboxResultEvent")
+
+local localRebirths = 0
+UpdateStatsEvent.OnClientEvent:Connect(function(dados)
+	localRebirths = dados.rebirths or 0
+end)
 
 local C_FUNDO  = Color3.fromRGB(18, 12, 28)
 local C_PAINEL = Color3.fromRGB(28, 20, 42)
@@ -136,6 +142,10 @@ end
 local function abrirConfirm(boxId)
 	local box = LootboxConfig.getBoxById(boxId)
 	if not box then return end
+	-- Caixa exclusiva de rebirth: não mostrar se jogador não tem rebirths suficientes
+	if box.requiresRebirth and box.requiresRebirth > 0 then
+		if localRebirths < box.requiresRebirth then return end
+	end
 
 	pendingBoxId     = boxId
 	confirmDesc.Text = box.emoji .. "  " .. box.name .. "\nCusto: 💰 " .. tostring(box.cost)
@@ -267,6 +277,25 @@ local function fecharResult()
 end
 
 local function abrirResult(result)
+	-- Rejeição do servidor (sem rebirth suficiente, etc.)
+	if result.success == false then
+		local toast = Instance.new("TextLabel")
+		toast.Text             = "❌ " .. (result.reason or "Erro ao abrir caixa")
+		toast.TextSize         = 14
+		toast.Font             = Enum.Font.GothamBold
+		toast.TextColor3       = Color3.new(1, 1, 1)
+		toast.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+		toast.BorderSizePixel  = 0
+		toast.Size             = UDim2.fromOffset(260, 40)
+		toast.Position         = UDim2.new(0.5, -130, 1, -60)
+		toast.ZIndex           = 30
+		toast.Parent           = gui
+		local corner = Instance.new("UICorner", toast)
+		corner.CornerRadius = UDim.new(0, 8)
+		task.delay(2.5, function() toast:Destroy() end)
+		return
+	end
+
 	resBoxName.Text  = result.boxName
 	resItemName.Text = result.itemName
 	thumbImg.Image   = string.format("rbxthumb://type=Asset&id=%d&w=420&h=420", result.itemId)

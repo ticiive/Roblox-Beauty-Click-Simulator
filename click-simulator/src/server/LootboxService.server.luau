@@ -140,6 +140,18 @@ ConfirmPurchaseEvent.OnServerEvent:Connect(function(player: Player, boxId: strin
 	local box = LootboxConfig.getBoxById(boxId)
 	if not box then return end
 
+	-- Valida requisito de rebirth
+	if box.requiresRebirth and box.requiresRebirth > 0 then
+		if (dados.rebirths or 0) < box.requiresRebirth then
+			LootboxResultEvent:FireClient(player, {
+				success = false,
+				reason  = "Requer rebirth " .. box.requiresRebirth,
+			})
+			purchasing[player.UserId] = nil
+			return
+		end
+	end
+
 	if dados.coins < box.cost then
 		print("[LootboxService]", player.Name, "sem moedas para caixa", boxId)
 		return
