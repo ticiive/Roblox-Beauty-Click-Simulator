@@ -10,7 +10,8 @@
       "Bash(git pull *)",
       "Bash(git fetch *)",
       "Bash(git push *)",
-      "PowerShell($cfg = Get-Content \".claude\\\\settings.json\" -Raw | ConvertFrom-Json; \"Pull: $\\($cfg.hooks.UserPromptSubmit[0].hooks[0].command\\)\"; \"Stop: $\\($cfg.hooks.Stop[0].hooks[0].command\\)\")"
+      "PowerShell($cfg = Get-Content \".claude\\\\settings.json\" -Raw | ConvertFrom-Json; \"Pull: $\\($cfg.hooks.UserPromptSubmit[0].hooks[0].command\\)\"; \"Stop: $\\($cfg.hooks.Stop[0].hooks[0].command\\)\")",
+      "Bash(find \"C:\\\\Users\\\\Admin\\\\OneDrive\\\\Área de Trabalho\\\\projetosroblox\\\\Roblox-Beauty-Click-Simulator\" -type f -name \"*.luau\" | head -30)"
     ]
   }
 }
