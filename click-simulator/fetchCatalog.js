@@ -18,7 +18,7 @@ const SORT_TYPE             = 3;      // 3 = MostFavorited
 
 const CATEGORIES = [
   { name: 'Hair',        category: 11, subcategory: 19 },
-  { name: 'Hats',        category: 11, subcategory: 9  },
+  { name: 'Hats',        assetType: 8 },                    // subcategoria 9 foi removida
   { name: 'FaceAcc',     category: 11, subcategory: 18 },
   { name: 'NeckAcc',     category: 11, subcategory: 22 },
   { name: 'ShoulderAcc', category: 11, subcategory: 23 },
@@ -55,7 +55,11 @@ function sanitizeName(name) {
 function httpGet(url) {
   return new Promise((resolve, reject) => {
     const req = https.get(url, {
-      headers: { 'User-Agent': 'Roblox/WinInet', 'Accept': 'application/json' },
+      headers: {
+        'User-Agent':      'Roblox/WinInet',
+        'Accept':          'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
     }, (res) => {
       if (res.statusCode === 429) { reject(new Error('rate_limited')); return; }
       if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
@@ -75,23 +79,28 @@ function httpGet(url) {
 // Busca de página do catálogo com retry
 // ─────────────────────────────────────────────────────────────
 
-function buildCatalogUrl(category, subcategory, cursor) {
-  let url = `https://catalog.roblox.com/v1/search/items/details`
-          + `?Category=${category}&Subcategory=${subcategory}`
-          + `&SortType=${SORT_TYPE}&Limit=30`;
+function buildCatalogUrl(cat, cursor) {
+  let url = `https://catalog.roblox.com/v1/search/items/details`;
+  if (cat.assetType !== undefined) {
+    // Hats e outros via AssetType direto (subcategoria foi removida da API)
+    url += `?AssetType=${cat.assetType}&SortType=${SORT_TYPE}&Limit=30`;
+  } else {
+    url += `?Category=${cat.category}&Subcategory=${cat.subcategory}`
+         + `&SortType=${SORT_TYPE}&Limit=30`;
+  }
   if (MAX_PRICE !== null) url += `&MaxPrice=${MAX_PRICE}`;
   if (cursor)             url += `&Cursor=${encodeURIComponent(cursor)}`;
   return url;
 }
 
-async function fetchPageWithRetry(category, subcategory, cursor) {
-  const delays = [500, 1500, 3000];
+async function fetchPageWithRetry(cat, cursor) {
+  const delays = [500, 1500, 3000, 5000, 8000];  // 5 retries
   for (let i = 0; i <= delays.length; i++) {
     try {
-      return await httpGet(buildCatalogUrl(category, subcategory, cursor));
+      return await httpGet(buildCatalogUrl(cat, cursor));
     } catch (err) {
       if (i === delays.length) throw err;
-      const wait = err.message === 'rate_limited' ? 5000 : delays[i];
+      const wait = err.message === 'rate_limited' ? 10000 : delays[i];
       console.log(`  ⚠️  Tentativa ${i + 1} falhou (${err.message}). Aguardando ${wait}ms…`);
       await sleep(wait);
     }
@@ -121,7 +130,8 @@ async function resolveTemplateId(assetId) {
 // Coleta de uma categoria
 // ─────────────────────────────────────────────────────────────
 
-async function fetchCategory(catName, category, subcategory) {
+async function fetchCategory(cat) {
+  const catName    = cat.name;
   const isClothing = CLOTHING_CATS.has(catName);
   const pauseMs   = isClothing ? 400 : 250;
 
@@ -130,7 +140,7 @@ async function fetchCategory(catName, category, subcategory) {
   let   cursor = null;
 
   while (items.length < ITEMS_PER_SUBCATEGORY) {
-    const data = await fetchPageWithRetry(category, subcategory, cursor);
+    const data = await fetchPageWithRetry(cat, cursor);
     if (!data.data || data.data.length === 0) break;
 
     for (const item of data.data) {
@@ -232,12 +242,12 @@ async function main() {
 
   for (const cat of CATEGORIES) {
     try {
-      catalog[cat.name] = await fetchCategory(cat.name, cat.category, cat.subcategory);
+      catalog[cat.name] = await fetchCategory(cat);
     } catch (err) {
       console.error(`  ❌ Erro fatal ao buscar ${cat.name}: ${err.message}`);
       catalog[cat.name] = [];
     }
-    await sleep(250);
+    await sleep(3000);  // 3s entre categorias para evitar rate limit
   }
 
   const outputPath = path.join(__dirname, 'src', 'shared', 'Catalog.luau');
