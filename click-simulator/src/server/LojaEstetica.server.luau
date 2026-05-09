@@ -21,6 +21,21 @@ if not loja then
 	return
 end
 
+local pivot = loja:GetPivot()
+print("[LojaEstetica] Modelo encontrado em:", pivot.Position)
+print("[LojaEstetica] Total de descendants:", #loja:GetDescendants())
+
+local count = 0
+for _, part in ipairs(loja:GetDescendants()) do
+	if part:IsA("BasePart") and count < 5 then
+		count += 1
+		print(string.format("  Part %d: %s | Size: %.1f x %.1f x %.1f | Pos Y: %.1f",
+			count, part.ClassName,
+			part.Size.X, part.Size.Y, part.Size.Z,
+			part.Position.Y))
+	end
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Classificação e aplicação de estética
 -- ─────────────────────────────────────────────────────────────
