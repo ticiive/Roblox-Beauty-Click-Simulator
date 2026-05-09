@@ -11,7 +11,10 @@
       "Bash(git fetch *)",
       "Bash(git push *)",
       "PowerShell($cfg = Get-Content \".claude\\\\settings.json\" -Raw | ConvertFrom-Json; \"Pull: $\\($cfg.hooks.UserPromptSubmit[0].hooks[0].command\\)\"; \"Stop: $\\($cfg.hooks.Stop[0].hooks[0].command\\)\")",
-      "Bash(find \"C:\\\\Users\\\\Admin\\\\OneDrive\\\\Área de Trabalho\\\\projetosroblox\\\\Roblox-Beauty-Click-Simulator\" -type f -name \"*.luau\" | head -30)"
+      "Bash(find \"C:\\\\Users\\\\Admin\\\\OneDrive\\\\Área de Trabalho\\\\projetosroblox\\\\Roblox-Beauty-Click-Simulator\" -type f -name \"*.luau\" | head -30)",
+      "PowerShell(git -C ..\\\\..\\\\.. rev-parse --show-toplevel)",
+      "PowerShell(git -C ..\\\\..\\\\.. branch --show-current)",
+      "PowerShell(git -C ..\\\\..\\\\.. pull --ff-only origin main)"
     ]
   }
 }

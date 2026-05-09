@@ -5,10 +5,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git pull origin main",
+            "command": "git pull origin main; git -C ..\\..\\.. pull --ff-only origin main",
             "shell": "powershell",
-            "timeout": 30,
-            "statusMessage": "Sincronizando com main..."
+            "timeout": 45,
+            "statusMessage": "Sincronizando worktree e VS Code com main..."
           }
         ]
       }
@@ -18,10 +18,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git add -A; git diff --staged --quiet; if ($LASTEXITCODE -ne 0) { git commit -m 'auto-sync' }; git push origin HEAD:main",
+            "command": "git add -A; git diff --staged --quiet; if ($LASTEXITCODE -ne 0) { git commit -m 'auto-sync' }; git push origin HEAD:main; git -C ..\\..\\.. pull --ff-only origin main",
             "shell": "powershell",
-            "timeout": 60,
-            "statusMessage": "Fazendo push automático..."
+            "timeout": 75,
+            "statusMessage": "Push para main + sincronizando VS Code..."
           }
         ]
       }
