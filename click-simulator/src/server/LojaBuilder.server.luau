@@ -2,6 +2,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting          = game:GetService("Lighting")
 local Workspace         = game:GetService("Workspace")
 
+-- Verificar se já existe loja importada manualmente
+local lojaImportada = Workspace:FindFirstChild("loja_roblox")
+	or Workspace:FindFirstChild("Loja_roblox")
+	or Workspace:FindFirstChild("loja_roblox_fbx")
+
+if lojaImportada then
+	print("[LojaBuilder] Loja importada detectada, pulando geração")
+	return
+end
+
+print("[LojaBuilder] Nenhuma loja importada, construindo via código...")
+
 local Shared        = ReplicatedStorage:WaitForChild("Shared")
 local LootboxConfig = require(Shared:WaitForChild("LootboxConfig"))
 local Catalog       = require(Shared:WaitForChild("Catalog"))
