@@ -14,7 +14,8 @@
       "Bash(find \"C:\\\\Users\\\\Admin\\\\OneDrive\\\\Área de Trabalho\\\\projetosroblox\\\\Roblox-Beauty-Click-Simulator\" -type f -name \"*.luau\" | head -30)",
       "PowerShell(git -C ..\\\\..\\\\.. rev-parse --show-toplevel)",
       "PowerShell(git -C ..\\\\..\\\\.. branch --show-current)",
-      "PowerShell(git -C ..\\\\..\\\\.. pull --ff-only origin main)"
+      "PowerShell(git -C ..\\\\..\\\\.. pull --ff-only origin main)",
+      "Bash(git checkout *)"
     ]
   }
 }
