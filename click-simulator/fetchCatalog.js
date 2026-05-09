@@ -12,7 +12,7 @@ const path  = require('path');
 // Configuração
 // ─────────────────────────────────────────────────────────────
 
-const ITEMS_PER_SUBCATEGORY = 200;
+const ITEMS_PER_SUBCATEGORY = 60;
 const MAX_PRICE             = null;   // null = sem filtro
 const SORT_TYPE             = 3;      // 3 = MostFavorited
 
@@ -28,8 +28,7 @@ const CATEGORIES = [
   { name: 'TShirts',     category: 3,  subcategory: 55 },
 ];
 
-// Categorias que precisam de lookup de template ID
-const CLOTHING_CATS = new Set(['Shirts', 'Pants', 'TShirts']);
+// Nota: IDs de Shirts/Pants são IDs de produto (template lookup removido para evitar rate limit)
 
 // ─────────────────────────────────────────────────────────────
 // Utilitários
@@ -59,6 +58,7 @@ function httpGet(url) {
         'User-Agent':      'Roblox/WinInet',
         'Accept':          'application/json',
         'Accept-Language': 'en-US,en;q=0.9',
+        'X-CSRF-Token':    '',
       },
     }, (res) => {
       if (res.statusCode === 429) { reject(new Error('rate_limited')); return; }
@@ -100,7 +100,7 @@ async function fetchPageWithRetry(cat, cursor) {
       return await httpGet(buildCatalogUrl(cat, cursor));
     } catch (err) {
       if (i === delays.length) throw err;
-      const wait = err.message === 'rate_limited' ? 10000 : delays[i];
+      const wait = err.message === 'rate_limited' ? 15000 : delays[i];
       console.log(`  ⚠️  Tentativa ${i + 1} falhou (${err.message}). Aguardando ${wait}ms…`);
       await sleep(wait);
     }
@@ -108,34 +108,12 @@ async function fetchPageWithRetry(cat, cursor) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Lookup de template ID (Shirts/Pants/TShirts)
-// economy.roblox.com retorna AssetId = ID real do template
-// ─────────────────────────────────────────────────────────────
-
-async function resolveTemplateId(assetId) {
-  const url = `https://economy.roblox.com/v2/assets/${assetId}/details`;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const data = await httpGet(url);
-      const templateId = data.AssetId || assetId;
-      return { id: templateId, fallback: false };
-    } catch (err) {
-      if (attempt < 2) await sleep(1000);
-    }
-  }
-  return { id: assetId, fallback: true };
-}
-
-// ─────────────────────────────────────────────────────────────
 // Coleta de uma categoria
 // ─────────────────────────────────────────────────────────────
 
 async function fetchCategory(cat) {
-  const catName    = cat.name;
-  const isClothing = CLOTHING_CATS.has(catName);
-  const pauseMs   = isClothing ? 400 : 250;
-
-  console.log(`\n📦 Buscando ${catName}${isClothing ? ' (lookup de template)' : ''}…`);
+  const catName = cat.name;
+  console.log(`\n📦 Buscando ${catName}…`);
   const items  = [];
   let   cursor = null;
 
@@ -147,21 +125,10 @@ async function fetchCategory(cat) {
       if (item.itemType !== 'Asset') continue;
       if (items.length >= ITEMS_PER_SUBCATEGORY) break;
 
-      let itemId         = item.id;
-      let templateFallback = false;
-
-      if (isClothing) {
-        const result = await resolveTemplateId(item.id);
-        itemId           = result.id;
-        templateFallback = result.fallback;
-        await sleep(pauseMs);
-      }
-
       items.push({
-        id:    itemId,
+        id:    item.id,
         name:  sanitizeName(item.name),
         price: item.price || 0,
-        templateFallback,
       });
     }
 
@@ -170,15 +137,10 @@ async function fetchCategory(cat) {
     cursor = data.nextPageCursor;
     if (!cursor || items.length >= ITEMS_PER_SUBCATEGORY) break;
 
-    await sleep(isClothing ? pauseMs : 250);
+    await sleep(250);
   }
 
-  const fallbacks = items.filter(i => i.templateFallback).length;
-  console.log(
-    `  ✅ ${items.length} itens coletados para ${catName}` +
-    (fallbacks > 0 ? `  ⚠️  ${fallbacks} sem template confirmado` : '') +
-    '          '
-  );
+  console.log(`  ✅ ${items.length} itens coletados para ${catName}          `);
   return items;
 }
 
@@ -190,6 +152,8 @@ function generateLuau(catalog) {
   const lines = [
     '-- Gerado automaticamente por fetchCatalog.js',
     '-- NÃO EDITE MANUALMENTE — rode `node fetchCatalog.js` para atualizar',
+    '-- Nota: IDs de Shirts/Pants são IDs de produto.',
+    '-- Se InsertService falhar ao carregar um item, ele é ignorado silenciosamente.',
     '',
     'local Catalog = {}',
     '',
@@ -255,7 +219,7 @@ async function main() {
       console.error(`  ❌ Erro fatal ao buscar ${cat.name}: ${err.message}`);
       catalog[cat.name] = [];
     }
-    await sleep(3000);  // 3s entre categorias para evitar rate limit
+    await sleep(5000);  // 5s entre categorias para evitar rate limit
   }
 
   const outputPath = path.join(__dirname, 'src', 'shared', 'Catalog.luau');
@@ -280,6 +244,9 @@ async function main() {
   if (vazias.length > 0) {
     console.warn(`⚠️  Categorias vazias: ${vazias.join(', ')}`);
   }
+
+  console.log('\n✅ Rode: rojo serve click-simulator');
+  console.log('   Depois Play no Studio pra ver as mudanças');
 }
 
 main().catch(err => {

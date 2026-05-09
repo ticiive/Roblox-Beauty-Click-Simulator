@@ -164,12 +164,25 @@ local function aplicarBodyAndi(player: Player, character: Model)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
+	-- Método 1: bundle ID 993
+	print("[StoreDecorator] Tentando aplicar body bundle 993...")
 	local ok, bundleDesc = pcall(function()
 		return Players:GetHumanoidDescriptionFromBundleId(993)
 	end)
+	print("[StoreDecorator] GetDescription ok:", ok, ok and "desc obtida" or tostring(bundleDesc))
+
+	-- Método 2: outfit ID 993
 	if not ok then
-		warn("[StoreDecorator] Falha ao obter desc do bundle Andi:", bundleDesc)
-		return
+		local ok2b, desc2 = pcall(function()
+			return Players:GetHumanoidDescriptionFromOutfitId(993)
+		end)
+		if ok2b then
+			ok         = true
+			bundleDesc = desc2
+			print("[StoreDecorator] Método alternativo (OutfitId) funcionou")
+		else
+			print("[StoreDecorator] OutfitId também falhou:", tostring(desc2))
+		end
 	end
 
 	local ok2, currentDesc = pcall(function()
@@ -177,19 +190,29 @@ local function aplicarBodyAndi(player: Player, character: Model)
 	end)
 	if not ok2 then return end
 
-	-- Copia só as proporções e partes do corpo; preserva rosto, cabelo e roupas
-	currentDesc.HeadScale   = bundleDesc.HeadScale
-	currentDesc.BodyType    = bundleDesc.BodyType
-	currentDesc.Proportions = bundleDesc.Proportions
-	currentDesc.Torso       = bundleDesc.Torso
-	currentDesc.LeftArm     = bundleDesc.LeftArm
-	currentDesc.RightArm    = bundleDesc.RightArm
-	currentDesc.LeftLeg     = bundleDesc.LeftLeg
-	currentDesc.RightLeg    = bundleDesc.RightLeg
+	if ok and bundleDesc then
+		-- Copia só as proporções e partes do corpo; preserva rosto, cabelo e roupas
+		currentDesc.HeadScale   = bundleDesc.HeadScale
+		currentDesc.BodyType    = bundleDesc.BodyType
+		currentDesc.Proportions = bundleDesc.Proportions
+		currentDesc.Torso       = bundleDesc.Torso
+		currentDesc.LeftArm     = bundleDesc.LeftArm
+		currentDesc.RightArm    = bundleDesc.RightArm
+		currentDesc.LeftLeg     = bundleDesc.LeftLeg
+		currentDesc.RightLeg    = bundleDesc.RightLeg
+	else
+		-- Método 3: proporções Rthro slim manuais
+		print("[StoreDecorator] Usando proporções Rthro slim manuais")
+		currentDesc.BodyTypeScale   = 0.05
+		currentDesc.HeadScale       = 0.9
+		currentDesc.HeightScale     = 1.05
+		currentDesc.ProportionScale = 1.0
+		currentDesc.WidthScale      = 0.9
+	end
 
-	local ok3, err3 = pcall(function()
-		humanoid:ApplyDescription(currentDesc)
-	end)
+	print("[StoreDecorator] Aplicando description...")
+	local ok3, err3 = pcall(humanoid.ApplyDescription, humanoid, currentDesc)
+	print("[StoreDecorator] ApplyDescription:", ok3, ok3 or tostring(err3))
 	if not ok3 then
 		warn("[StoreDecorator] Falha ao aplicar body Andi (R6?):", err3)
 	else
