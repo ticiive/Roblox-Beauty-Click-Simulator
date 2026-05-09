@@ -44,20 +44,28 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent  = LocalPlayer:WaitForChild("PlayerGui")
 
--- Botão ⚙️ Admin (canto superior direito)
+-- Botão ⚙️ Admin — estilo da barra inferior, posicionado à direita dela
 local openBtn       = Instance.new("TextButton")
 openBtn.Name        = "AdminOpenBtn"
-openBtn.Size        = UDim2.fromOffset(90, 30)
-openBtn.Position    = UDim2.new(1, -98, 0, 8)
-openBtn.Text        = "⚙️ Admin"
-openBtn.TextSize    = 13
+openBtn.Size        = UDim2.fromOffset(45, 45)
+openBtn.AnchorPoint = Vector2.new(0.5, 1)
+openBtn.Position    = UDim2.new(0.5, 160, 1, -21)
+openBtn.Text        = "⚙️"
+openBtn.TextSize    = 20
 openBtn.Font        = Enum.Font.GothamBold
 openBtn.TextColor3  = Color3.new(1, 1, 1)
-openBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+openBtn.BackgroundColor3 = Color3.fromRGB(150, 150, 160)
 openBtn.BorderSizePixel  = 0
+openBtn.AutoButtonColor  = false
 openBtn.ZIndex      = 10
 openBtn.Parent      = screenGui
-Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 12)
+do
+	local s = Instance.new("UIStroke")
+	s.Color     = Color3.fromRGB(255, 215, 0)
+	s.Thickness = 1.5
+	s.Parent    = openBtn
+end
 
 -- Overlay escuro
 local overlay       = Instance.new("Frame")

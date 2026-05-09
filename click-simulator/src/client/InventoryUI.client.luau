@@ -91,26 +91,10 @@ gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent         = playerGui
 
--- ─────────────────────────────────────────────────────────────
--- Botão toggle 👕
--- ─────────────────────────────────────────────────────────────
-
-local btnInv = Instance.new("TextButton")
-btnInv.Size             = UDim2.new(0, 72, 0, 72)
-btnInv.Position         = UDim2.new(1, -88, 1, -168)
-btnInv.BackgroundColor3 = Color3.fromRGB(22, 14, 36)
-btnInv.BorderSizePixel  = 0
-btnInv.Text             = "👕"
-btnInv.TextSize         = 36
-btnInv.Font             = Enum.Font.GothamBold
-btnInv.Parent           = gui
-addCorner(btnInv, 18)
-addStroke(btnInv, 2, C_OURO)
-
-local pulso = TweenService:Create(btnInv,
-	TweenInfo.new(1.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
-	{ Size=UDim2.new(0, 78, 0, 78), Position=UDim2.new(1, -91, 1, -171) })
-pulso:Play()
+-- BindableEvent para ClientUI abrir o inventário
+local openBE = Instance.new("BindableEvent")
+openBE.Name   = "OpenInventoryBE"
+openBE.Parent = playerGui
 
 -- ─────────────────────────────────────────────────────────────
 -- Overlay
@@ -523,16 +507,12 @@ local function fecharPainel()
 		overlay.Visible = false
 		panel.Visible   = false
 		painelAberto    = false
-		task.delay(0.1, function() pulso:Play() end)
 	end)
 end
 
 local function abrirPainel()
+	if painelAberto then fecharPainel(); return end
 	painelAberto = true
-	pulso:Cancel()
-	btnInv.Size     = UDim2.new(0, 72, 0, 72)
-	btnInv.Position = UDim2.new(1, -88, 1, -168)
-
 	overlay.Visible = true
 	panel.Visible   = true
 	panel.Size      = UDim2.fromOffset(0, 0)
@@ -544,9 +524,7 @@ local function abrirPainel()
 	populateCurrentTab()
 end
 
-btnInv.Activated:Connect(function()
-	if painelAberto then fecharPainel() else abrirPainel() end
-end)
+openBE.Event:Connect(abrirPainel)
 
 closeBtn.Activated:Connect(fecharPainel)
 
@@ -565,6 +543,12 @@ InventoryUpdateEvent.OnClientEvent:Connect(function(inventory, equipped)
 	currentInventory = inventory or {}
 	currentEquipped  = equipped  or {}
 	if painelAberto then populateCurrentTab() end
+
+	-- Notifica ClientUI para atualizar badge de inventário
+	local count = 0
+	for _ in currentInventory do count += 1 end
+	local invCountBE = playerGui:FindFirstChild("SetInvCountBE")
+	if invCountBE then invCountBE:Fire(count) end
 end)
 
 print("[InventoryUI] Pronto.")

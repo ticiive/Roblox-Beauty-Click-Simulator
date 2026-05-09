@@ -42,6 +42,11 @@ gui.IgnoreGuiInset = true
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent         = playerGui
 
+-- BindableEvent para ClientUI abrir a confirmação de rebirth
+local openBE = Instance.new("BindableEvent")
+openBE.Name   = "OpenRebirthBE"
+openBE.Parent = playerGui
+
 -- ─────────────────────────────────────────────────────────────
 -- Popup de CONFIRMAÇÃO
 -- ─────────────────────────────────────────────────────────────
@@ -210,6 +215,7 @@ end)
 cancelarBtn.Activated:Connect(fecharConfirm)
 
 RebirthConfirmEvent.OnClientEvent:Connect(abrirConfirm)
+openBE.Event:Connect(abrirConfirm)  -- barra de botões também pode abrir
 
 -- ─────────────────────────────────────────────────────────────
 -- Popup de RESULTADO
