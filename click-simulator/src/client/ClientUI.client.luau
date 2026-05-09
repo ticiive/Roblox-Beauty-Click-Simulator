@@ -108,31 +108,9 @@ local labelRebirth = novaLabel(80, "",                13, C_SECUNDARIA)
 labelRebirth.Visible = false
 
 -- ─────────────────────────────────────────────────────────────
--- Botão de clique central
+-- Feedback visual de cliques (botão central removido — InputBegan
+-- abaixo já captura cliques em qualquer ponto da tela)
 -- ─────────────────────────────────────────────────────────────
-
-local clickBtn = Instance.new("TextButton")
-clickBtn.Size             = UDim2.fromOffset(110, 110)
-clickBtn.AnchorPoint      = Vector2.new(0.5, 0.5)
-clickBtn.Position         = UDim2.new(0.5, 0, 0.5, 0)
-clickBtn.BackgroundColor3 = C_PRIMARIA
-clickBtn.BorderSizePixel  = 0
-clickBtn.Text             = "👆"
-clickBtn.TextSize         = 46
-clickBtn.Font             = Enum.Font.GothamBold
-clickBtn.AutoButtonColor  = false
-clickBtn.ZIndex           = 2
-clickBtn.Parent           = screenGui
-addCorner(clickBtn, UDim.new(1, 0))
-addStroke(clickBtn, C_SECUNDARIA, 2.5)
-
--- Animação press/pop
-local tweenPress = TweenService:Create(clickBtn,
-	TweenInfo.new(0.05, Enum.EasingStyle.Linear),
-	{ Size = UDim2.fromOffset(100, 100), Position = UDim2.new(0.5, 0, 0.5, 0) })
-local tweenPop = TweenService:Create(clickBtn,
-	TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-	{ Size = UDim2.fromOffset(110, 110), Position = UDim2.new(0.5, 0, 0.5, 0) })
 
 local function mostrarFeedback(pos: Vector2)
 	local valor = fmt(statsAtuais.clickPower)
@@ -157,17 +135,7 @@ local function mostrarFeedback(pos: Vector2)
 	task.delay(0.65, function() lbl:Destroy() end)
 end
 
-clickBtn.MouseButton1Down:Connect(function()
-	tweenPress:Play()
-end)
-
-clickBtn.MouseButton1Up:Connect(function()
-	tweenPop:Play()
-	mostrarFeedback(UserInputService:GetMouseLocation())
-	ClickEvent:FireServer()
-end)
-
--- Clique em qualquer lugar também registra (mantém comportamento anterior)
+-- Clique em qualquer lugar da tela registra
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 	if input.UserInputType == Enum.UserInputType.MouseButton1
