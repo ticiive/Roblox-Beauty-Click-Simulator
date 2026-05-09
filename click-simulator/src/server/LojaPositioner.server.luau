@@ -1,8 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════
 -- LojaPositioner.server.luau — ServerScriptService
--- 1) Desce o modelo "loja_roblox" para que sua base toque o chão (Y=0).
--- 2) Ancora todas as BaseParts do modelo (remove a gravidade — partes
---    ficam fixas, sem cair nem se mover por física).
+-- Desce o modelo "loja_roblox" para que sua base toque o chão (Y=0).
+-- Usa bounding box para descobrir o ponto mais baixo do modelo e
+-- aplica PivotTo deslocando apenas no eixo Y, preservando X/Z e rotação.
 -- ═══════════════════════════════════════════════════════════════
 
 local Workspace = game:GetService("Workspace")
@@ -66,22 +66,6 @@ local function ajustarAltura(modelo)
 end
 
 -- ─────────────────────────────────────────────────────────────
--- Ancora todas as BaseParts do modelo (remove gravidade)
--- ─────────────────────────────────────────────────────────────
-local function ancorarTudo(modelo)
-	local count = 0
-	for _, p in ipairs(modelo:GetDescendants()) do
-		if p:IsA("BasePart") then
-			if not p.Anchored then
-				p.Anchored = true
-				count += 1
-			end
-		end
-	end
-	print(string.format("[LojaPositioner] %d partes ancoradas em %s (gravidade desativada).", count, modelo.Name))
-end
-
--- ─────────────────────────────────────────────────────────────
 -- Inicialização: aguarda o modelo aparecer e ajusta
 -- ─────────────────────────────────────────────────────────────
 task.spawn(function()
@@ -98,8 +82,5 @@ task.spawn(function()
 		return
 	end
 
-	-- Ancora primeiro (evita qualquer micro-queda entre operações),
-	-- depois ajusta a altura.
-	ancorarTudo(modelo)
 	ajustarAltura(modelo)
 end)
