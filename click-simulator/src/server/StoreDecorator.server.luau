@@ -104,54 +104,56 @@ end
 -- ─────────────────────────────────────────────────────────────
 
 task.spawn(function()
-	local positions = getLootboxPositions()
-	if #positions == 0 then
-		warn("[StoreDecorator] Sem posições — decoração cancelada")
-		return
-	end
+	-- LojaBuilder já colocou manequins e araras
+	if Workspace:FindFirstChild("Loja") then
+		print("[StoreDecorator] LojaBuilder ativo — pulando manequins e racks")
+	else
+		local positions = getLootboxPositions()
+		if #positions == 0 then
+			warn("[StoreDecorator] Sem posições — decoração cancelada")
+		else
+			local lookDir = Vector3.new(1, 0, 0)
 
-	local lookDir = Vector3.new(1, 0, 0)
+			for _, boxPos in ipairs(positions) do
+				local manPos = Vector3.new(boxPos.X + 15, boxPos.Y, boxPos.Z)
+				local man = spawnAsset(ID_MANNEQUIN,
+					CFrame.lookAt(manPos, manPos + lookDir))
+				if man then
+					print("[StoreDecorator] Manequim em", tostring(manPos))
+				end
+					task.wait(0.15)
+			end
 
-	-- ── Manequins: 1 por lootbox, 15 studs à frente ──────────
-	for _, boxPos in ipairs(positions) do
-		local manPos = Vector3.new(boxPos.X + 15, boxPos.Y, boxPos.Z)
-		local man = spawnAsset(ID_MANNEQUIN,
-			CFrame.lookAt(manPos, manPos + lookDir))
-		if man then
-			print("[StoreDecorator] Manequim em", tostring(manPos))
-		end
-		task.wait(0.15)
-	end
+			-- ── Racks: 3 distribuídos em Z ao longo da parede ────────
+			local sumZ, sumX, sumY = 0, 0, 0
+			for _, p in ipairs(positions) do sumZ += p.Z; sumX += p.X; sumY += p.Y end
+			local centerZ = sumZ / #positions
+			local baseX   = sumX / #positions + 20
+			local baseY   = sumY / #positions
 
-	-- ── Racks: 3 distribuídos em Z ao longo da parede ────────
-	local sumZ, sumX, sumY = 0, 0, 0
-	for _, p in ipairs(positions) do sumZ += p.Z; sumX += p.X; sumY += p.Y end
-	local centerZ = sumZ / #positions
-	local baseX   = sumX / #positions + 20  -- 20 studs à frente das caixas
-	local baseY   = sumY / #positions
+			for i = 1, 3 do
+				local rackZ   = centerZ + (i - 2) * 8
+				local rackPos = Vector3.new(baseX, baseY, rackZ)
+				local rack = spawnAsset(ID_RACK, CFrame.new(rackPos))
+				if rack then
+					print("[StoreDecorator] Cabideiro em", tostring(rackPos))
 
-	for i = 1, 3 do
-		local rackZ   = centerZ + (i - 2) * 8
-		local rackPos = Vector3.new(baseX, baseY, rackZ)
-		local rack = spawnAsset(ID_RACK, CFrame.new(rackPos))
-		if rack then
-			print("[StoreDecorator] Cabideiro em", tostring(rackPos))
-
-			-- 2 cabides por rack (±2 studs em X, +4 em Y)
-			for _, dx in ipairs({ -2, 2 }) do
-				local hPos = Vector3.new(rackPos.X + dx, rackPos.Y + 4, rackPos.Z)
-				local h = spawnAsset(ID_HANGER, CFrame.new(hPos), false)
-				if h then
-					for _, p in h:GetDescendants() do
-						if p:IsA("BasePart") then p.CanCollide = false end
+					for _, dx in ipairs({ -2, 2 }) do
+						local hPos = Vector3.new(rackPos.X + dx, rackPos.Y + 4, rackPos.Z)
+						local h = spawnAsset(ID_HANGER, CFrame.new(hPos), false)
+						if h then
+							for _, p in h:GetDescendants() do
+								if p:IsA("BasePart") then p.CanCollide = false end
+							end
+						end
 					end
 				end
+				task.wait(0.15)
 			end
-		end
-		task.wait(0.15)
-	end
 
-	print("[StoreDecorator] Decoração concluída.")
+			print("[StoreDecorator] Decoração concluída.")
+		end
+	end
 end)
 
 -- ─────────────────────────────────────────────────────────────

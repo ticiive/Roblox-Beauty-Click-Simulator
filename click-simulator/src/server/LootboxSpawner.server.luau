@@ -127,6 +127,12 @@ end
 -- Posições ao longo da parede esquerda
 -- ─────────────────────────────────────────────────────────────
 
+-- LojaBuilder já criou a pasta Lootboxes com as caixas
+if Workspace:FindFirstChild("Lootboxes") and #Workspace.Lootboxes:GetChildren() > 0 then
+	print("[LootboxSpawner] Lootboxes já criadas pelo LojaBuilder — ignorando")
+	return
+end
+
 local wall    = findLeftWall()
 local N       = #LootboxConfig.Boxes
 local lookDir = Vector3.new(1, 0, 0)

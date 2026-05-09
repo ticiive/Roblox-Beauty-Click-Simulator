@@ -5,6 +5,13 @@
 local Lighting  = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
+-- Aguarda 1s para LojaBuilder criar a pasta "Loja" se estiver ativo
+task.wait(1)
+if Workspace:FindFirstChild("Loja") then
+	print("[LojaEstetica] LojaBuilder ativo — ignorando")
+	return
+end
+
 -- ─────────────────────────────────────────────────────────────
 -- Aguarda modelo carregar (até 10s)
 -- ─────────────────────────────────────────────────────────────
