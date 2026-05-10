@@ -1,7 +1,7 @@
 local AdminConfig = {}
 
 AdminConfig.AdminIds = {
-	000000000,  -- IMPORTANTE: substitua pelo seu UserId do Roblox
+	9658715268, 1679623289  -- IMPORTANTE: substitua pelo seu UserId do Roblox
 }
 
 function AdminConfig.isAdmin(userId: number): boolean
