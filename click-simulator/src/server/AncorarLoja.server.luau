@@ -1,26 +1,19 @@
-local function ancorarTudo()
-	local loja = workspace:WaitForChild("loja_roblox", 15)
-	if not loja then
-		warn("[AncorarLoja] loja_roblox não encontrada!")
-		return
+-- Ancora TUDO no workspace, não só loja_roblox
+task.wait(3) -- espera tudo carregar
+
+local count = 0
+for _, obj in ipairs(workspace:GetDescendants()) do
+	if obj:IsA("BasePart") then
+		obj.Anchored = true
+		count += 1
 	end
-
-	local count = 0
-	for _, obj in ipairs(loja:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			obj.Anchored = true
-			count += 1
-		end
-	end
-
-	-- Também ancorar quando novos objetos forem adicionados
-	loja.DescendantAdded:Connect(function(obj)
-		if obj:IsA("BasePart") then
-			obj.Anchored = true
-		end
-	end)
-
-	print("[AncorarLoja] ✅ " .. count .. " partes ancoradas!")
 end
 
-ancorarTudo()
+-- Listener pra qualquer nova Part que aparecer
+workspace.DescendantAdded:Connect(function(obj)
+	if obj:IsA("BasePart") then
+		obj.Anchored = true
+	end
+end)
+
+print("[AncorarLoja] ✅ " .. count .. " partes ancoradas!")
